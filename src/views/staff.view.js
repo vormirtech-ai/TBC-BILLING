@@ -473,8 +473,7 @@ export async function renderStaff({ outlet }) {
                   await staffRepo.deleteShift(shift.id);
                   toast.success('Shift removed.');
                   modal.close();
-                  await paintRota();
-                  await paintHours();
+                  await refreshRota();
                 } catch (error) {
                   reportError(error);
                 }
@@ -500,8 +499,7 @@ export async function renderStaff({ outlet }) {
               });
               toast.success('Rota updated.');
               modal.close();
-              await paintRota();
-              await paintHours();
+              await refreshRota();
             } catch (error) {
               reportError(error);
               button.disabled = false;
@@ -615,8 +613,7 @@ export async function renderStaff({ outlet }) {
               const count = await staffRepo.copyShifts(from.value, to.value);
               toast.success(`${count} shift${count === 1 ? '' : 's'} copied.`);
               modal.close();
-              await paintRota();
-              await paintHours();
+              await refreshRota();
             } catch (error) {
               reportError(error);
               button.disabled = false;
@@ -689,6 +686,15 @@ export async function renderStaff({ outlet }) {
   }
 
   /* --------------------------------------------------------- assembly --- */
+
+  /**
+   * Anything that changes the rota can change today, so the Today panel is
+   * repainted with it — a shift added for this morning should show up there
+   * straight away, not after a reload.
+   */
+  async function refreshRota() {
+    await Promise.all([paintRota(), paintHours(), paintToday()]);
+  }
 
   async function paintAll() {
     await Promise.all([paintToday(), paintRota(), paintHours()]);
