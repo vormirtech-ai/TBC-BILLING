@@ -12,6 +12,7 @@ import {
 import { formatMoney } from '../core/money.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import * as transactionsRepo from '../repositories/transactions.repo.js';
+import * as inventoryRepo from '../repositories/inventory.repo.js';
 import * as daysRepo from '../repositories/businessDays.repo.js';
 import { summarise } from '../services/reports.service.js';
 import { exportBusinessDay, exportDateRange, exportEverything } from '../services/export.service.js';
@@ -152,6 +153,9 @@ export async function renderHistory({ outlet, query: routeQuery }) {
               await transactionsRepo.voidTransaction(txn.id, reason, {
                 trackStock: Boolean(settings.stockTrackingEnabled),
               });
+              // The ingredients went back to storage; re-read the cache the
+              // stock screens and the low-stock badge draw from.
+              if (settings.stockTrackingEnabled) await inventoryRepo.loadInventory();
               all = await transactionsRepo.listAll();
               toast.success(`${txn.orderNo} voided.`);
               modal.close();

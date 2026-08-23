@@ -14,6 +14,7 @@ import { STOCK_UNITS, STOCK_MOVEMENT_KINDS } from '../config/app.config.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import * as inventoryRepo from '../repositories/inventory.repo.js';
 import { getMenu } from '../repositories/menu.repo.js';
+import { exportInventory } from '../services/export.service.js';
 import { openModal, confirmDialog } from '../ui/modal.js';
 import { toast, reportError } from '../ui/toast.js';
 
@@ -599,6 +600,22 @@ export async function renderInventory({ outlet }) {
         el('p.page__sub', { text: 'What is on the shelf, and what each drink costs to make.' }),
       ]),
       el('div.page__actions', {}, [
+        el('button.btn.btn--ghost', {
+          type: 'button',
+          text: 'Export to Excel',
+          onclick: async (event) => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+              const result = await exportInventory();
+              toast.success(`${result.filename} downloaded.`);
+            } catch (error) {
+              reportError(error);
+            } finally {
+              button.disabled = false;
+            }
+          },
+        }),
         el('button.btn.btn--primary', {
           type: 'button',
           text: 'Add a stock item',

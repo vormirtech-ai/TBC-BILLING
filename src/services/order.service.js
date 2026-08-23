@@ -14,6 +14,7 @@ import { getSettings } from '../repositories/settings.repo.js';
 import { commitTransaction } from '../repositories/transactions.repo.js';
 import * as ordersRepo from '../repositories/onlineOrders.repo.js';
 import * as tablesRepo from '../repositories/tables.repo.js';
+import * as inventoryRepo from '../repositories/inventory.repo.js';
 import { announceStatus } from './orderChannel.service.js';
 import * as cart from './cart.service.js';
 
@@ -120,6 +121,11 @@ export async function completeSale(payment) {
   // stored. None of it may throw: a bill that exists must not look like a
   // failure because a table could not be marked free.
   try {
+    // The sale deducted stock inside its own transaction, straight to storage.
+    // Re-read it so the cached levels the screens and the low-stock badge draw
+    // from match the shelf.
+    if (settings.stockTrackingEnabled) await inventoryRepo.loadInventory();
+
     if (draft.onlineOrderId) {
       const closed = await ordersRepo.markBilled(draft.onlineOrderId, saved);
       // Let the customer's phone know their order turned into a bill.

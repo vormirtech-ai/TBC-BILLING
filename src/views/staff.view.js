@@ -21,6 +21,7 @@ import { formatMoney, parseRupeesToPaise, formatAmount } from '../core/money.js'
 import { ATTENDANCE_STATUS, ATTENDANCE_LABELS } from '../config/app.config.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import * as staffRepo from '../repositories/staff.repo.js';
+import { exportAttendance } from '../services/export.service.js';
 import { openModal, confirmDialog } from '../ui/modal.js';
 import { toast, reportError } from '../ui/toast.js';
 
@@ -707,6 +708,24 @@ export async function renderStaff({ outlet }) {
         el('p.page__sub', { text: 'Attendance, the rota, and the hours that came out of it.' }),
       ]),
       el('div.page__actions', {}, [
+        el('button.btn.btn--ghost', {
+          type: 'button',
+          text: 'Export hours',
+          title: 'Attendance and hours for the week shown below',
+          onclick: async (event) => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+              const days = weekDays(state.week);
+              const result = await exportAttendance(days[0], days[6]);
+              toast.success(`${result.filename} downloaded.`);
+            } catch (error) {
+              reportError(error);
+            } finally {
+              button.disabled = false;
+            }
+          },
+        }),
         el('button.btn.btn--ghost', { type: 'button', text: 'Copy a day', onclick: copyDayForm }),
         el('button.btn.btn--primary', {
           type: 'button',

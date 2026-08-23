@@ -10,12 +10,16 @@
 
 import { createWorkbook, STYLE } from '../lib/xlsx.js';
 import { paiseToRupees } from '../core/money.js';
-import { downloadBlob, formatDateKeyLong, fromDateKey, pad, sum } from '../core/utils.js';
+import { downloadBlob, formatDateKeyLong, fromDateKey, pad, sum, toDateKey } from '../core/utils.js';
 import { requireAdmin } from '../core/session.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import * as transactionsRepo from '../repositories/transactions.repo.js';
 import * as daysRepo from '../repositories/businessDays.repo.js';
 import { getMenu } from '../repositories/menu.repo.js';
+import * as inventoryRepo from '../repositories/inventory.repo.js';
+import * as staffRepo from '../repositories/staff.repo.js';
+import { quantityToNumber } from '../core/quantity.js';
+import { STOCK_MOVEMENT_KINDS, ATTENDANCE_LABELS } from '../config/app.config.js';
 import { AppError } from '../core/utils.js';
 import { PAYMENT_METHODS, paymentLabel } from '../config/app.config.js';
 
@@ -271,6 +275,207 @@ export async function exportMenu() {
   const filename = `Cafe_Menu_${new Date().toISOString().slice(0, 10)}.xlsx`;
   downloadBlob(blob, filename);
   return { filename, count: items.length };
+}
+
+/* ------------------------------------------------------------- stock --- */
+
+const MOVEMENT_LABELS = {
+  [STOCK_MOVEMENT_KINDS.OPENING]: 'Opening count',
+  [STOCK_MOVEMENT_KINDS.RECEIVED]: 'Delivery',
+  [STOCK_MOVEMENT_KINDS.SALE]: 'Sold',
+  [STOCK_MOVEMENT_KINDS.SALE_REVERSAL]: 'Bill voided',
+  [STOCK_MOVEMENT_KINDS.WASTAGE]: 'Wastage',
+  [STOCK_MOVEMENT_KINDS.CORRECTION]: 'Recount',
+};
+
+/**
+ * Stock levels, with every movement behind them on a second sheet.
+ *
+ * The two sheets answer different questions — "what do I order" and "where did
+ * it go" — and a stocktake usually needs both open at once.
+ */
+export async function exportInventory() {
+  requireAdmin('exporting stock');
+  const items = inventoryRepo.getInventory();
+  if (!items.length) throw new AppError('There are no stock items to export.', 'NO_DATA');
+
+  const levelHeader = [
+    'Item',
+    'Category',
+    'Unit',
+    'On the shelf',
+    'Reorder at',
+    'Needs ordering',
+    'Cost per unit',
+    'Value',
+    'Supplier',
+  ];
+  const levelRows = [levelHeader.map((label) => ({ v: label, s: STYLE.HEADER }))];
+
+  for (const item of items) {
+    levelRows.push([
+      item.name,
+      item.category,
+      item.unit,
+      { v: quantityToNumber(item.quantity), s: STYLE.DEFAULT },
+      { v: quantityToNumber(item.lowStockLevel), s: STYLE.DEFAULT },
+      inventoryRepo.isLow(item) ? 'Yes' : 'No',
+      money(item.costPerUnit),
+      money(Math.round((item.quantity * (item.costPerUnit || 0)) / 1000)),
+      item.supplier || '',
+    ]);
+  }
+  levelRows.push(
+    [],
+    [{ v: 'Total value at cost', s: STYLE.BOLD }, '', '', '', '', '', '', moneyBold(inventoryRepo.stockValue())]
+  );
+
+  const movements = await inventoryRepo.listMovements();
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const movementHeader = ['When', 'Item', 'Reason', 'Change', 'Left on the shelf', 'Reference', 'By', 'Note'];
+  const movementRows = [movementHeader.map((label) => ({ v: label, s: STYLE.HEADER }))];
+
+  for (const row of movements) {
+    const item = byId.get(row.stockId);
+    const at = new Date(row.at);
+    movementRows.push([
+      { v: at, t: 'd', s: STYLE.DATE },
+      item?.name || row.stockId,
+      MOVEMENT_LABELS[row.kind] || row.kind,
+      { v: quantityToNumber(row.change), s: STYLE.DEFAULT },
+      { v: quantityToNumber(row.balanceAfter), s: STYLE.DEFAULT },
+      row.reference || '',
+      row.by || '',
+      { v: row.note || '', s: STYLE.WRAP },
+    ]);
+  }
+
+  const blob = createWorkbook([
+    {
+      name: 'Stock Levels',
+      rows: levelRows,
+      columns: [30, 18, 8, 14, 12, 14, 14, 14, 22],
+      freezeRow: 1,
+      autoFilterRow: 1,
+    },
+    {
+      name: 'Movements',
+      rows: movementRows,
+      columns: [14, 28, 16, 12, 16, 18, 14, 40],
+      freezeRow: 1,
+      autoFilterRow: 1,
+    },
+  ]);
+
+  const filename = `Cafe_Stock_${toDateKey()}.xlsx`;
+  downloadBlob(blob, filename);
+  return { filename, count: items.length };
+}
+
+/* ---------------------------------------------------------- attendance --- */
+
+/**
+ * Attendance and hours for a date range — the sheet a payroll run starts from.
+ * Day by day on one sheet, totalled per person on the other.
+ */
+export async function exportAttendance(fromKey, toKey) {
+  requireAdmin('exporting attendance');
+  if (fromKey > toKey) throw new AppError('The start date is after the end date.', 'VALIDATION');
+
+  const people = staffRepo.getStaff();
+  if (!people.length) throw new AppError('There are no staff to export.', 'NO_DATA');
+
+  const [attendance, shifts] = await Promise.all([
+    staffRepo.attendanceBetween(fromKey, toKey),
+    staffRepo.shiftsBetween(fromKey, toKey),
+  ]);
+  if (!attendance.length && !shifts.length) {
+    throw new AppError('No rota or attendance falls in that date range.', 'NO_DATA');
+  }
+
+  const byId = new Map(people.map((person) => [person.id, person]));
+  const dayHeader = ['Date', 'Staff', 'Job', 'Attendance', 'Started', 'Finished', 'Break (min)', 'Hours worked', 'Rostered', 'Note'];
+  const dayRows = [dayHeader.map((label) => ({ v: label, s: STYLE.HEADER }))];
+
+  const dates = [...new Set([...attendance.map((r) => r.date), ...shifts.map((r) => r.date)])].sort();
+  for (const date of dates) {
+    for (const person of people) {
+      const record = attendance.find((row) => row.date === date && row.staffId === person.id);
+      const rostered = shifts.filter((row) => row.date === date && row.staffId === person.id);
+      if (!record && !rostered.length) continue;
+
+      const worked = staffRepo.attendanceMinutes(record);
+      dayRows.push([
+        { v: fromDateKey(date), t: 'd', s: STYLE.DATE },
+        person.name,
+        person.jobTitle || '',
+        record ? ATTENDANCE_LABELS[record.status] || record.status : 'No record',
+        record?.clockIn ? { v: new Date(record.clockIn), t: 't', s: STYLE.TIME } : '',
+        record?.clockOut ? { v: new Date(record.clockOut), t: 't', s: STYLE.TIME } : '',
+        { v: record?.breakMinutes || 0, s: STYLE.INTEGER },
+        // Hours as a decimal, because that is what payroll multiplies by.
+        { v: Math.round((worked / 60) * 100) / 100, s: STYLE.DEFAULT },
+        {
+          v: Math.round(
+            (rostered.reduce((total, shift) => total + staffRepo.shiftMinutes(shift), 0) / 60) * 100
+          ) / 100,
+          s: STYLE.DEFAULT,
+        },
+        { v: record?.note || rostered.map((shift) => shift.note).filter(Boolean).join('; ') || '', s: STYLE.WRAP },
+      ]);
+    }
+  }
+
+  const summary = staffRepo.summariseHours(people, attendance, shifts, { from: fromKey, to: toKey });
+  const totalHeader = ['Staff', 'Job', 'Days present', 'Absent', 'On leave', 'Hours worked', 'Hours rostered', 'Hourly rate', 'Pay'];
+  const totalRows = [totalHeader.map((label) => ({ v: label, s: STYLE.HEADER }))];
+
+  for (const row of summary) {
+    if (!row.minutes && !row.rosteredMinutes && !row.days) continue;
+    const person = byId.get(row.staffId);
+    totalRows.push([
+      row.name,
+      row.jobTitle || '',
+      { v: row.days, s: STYLE.INTEGER },
+      { v: row.absent, s: STYLE.INTEGER },
+      { v: row.leave, s: STYLE.INTEGER },
+      { v: Math.round((row.minutes / 60) * 100) / 100, s: STYLE.DEFAULT },
+      { v: Math.round((row.rosteredMinutes / 60) * 100) / 100, s: STYLE.DEFAULT },
+      money(person?.hourlyRate || 0),
+      money(row.pay),
+    ]);
+  }
+  totalRows.push(
+    [],
+    [
+      { v: 'Total pay', s: STYLE.BOLD },
+      '', '', '', '', '', '', '',
+      moneyBold(summary.reduce((total, row) => total + row.pay, 0)),
+    ],
+    [],
+    [
+      'Note',
+      {
+        v: 'Hours worked come from clock-in and clock-out times, less unpaid breaks. Rostered hours come from the rota.',
+        s: STYLE.WRAP,
+      },
+    ]
+  );
+
+  const blob = createWorkbook([
+    {
+      name: 'Day by Day',
+      rows: dayRows,
+      columns: [13, 24, 16, 14, 11, 11, 12, 14, 12, 34],
+      freezeRow: 1,
+      autoFilterRow: 1,
+    },
+    { name: 'Hours Summary', rows: totalRows, columns: [24, 16, 13, 10, 11, 14, 15, 13, 14] },
+  ]);
+
+  const filename = `Cafe_Attendance_${fromKey}_to_${toKey}.xlsx`;
+  downloadBlob(blob, filename);
+  return { filename, count: dayRows.length - 1 };
 }
 
 export { fromDateKey };
