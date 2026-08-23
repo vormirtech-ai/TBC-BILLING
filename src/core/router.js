@@ -17,6 +17,11 @@ export function defineRoute(path, config) {
   routes.set(path, config);
 }
 
+/** The registered configuration for a path, so a guard can read its rules. */
+export function getRoute(path) {
+  return routes.get(path) || null;
+}
+
 export function setNotFound(render) {
   notFound = render;
 }

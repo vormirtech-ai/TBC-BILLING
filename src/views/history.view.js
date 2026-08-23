@@ -147,7 +147,11 @@ export async function renderHistory({ outlet, query: routeQuery }) {
             });
             if (!ok) return;
             try {
-              await transactionsRepo.voidTransaction(txn.id, reason);
+              // Voiding puts the ingredients back on the shelf, so stock and
+              // takings stay in step with each other.
+              await transactionsRepo.voidTransaction(txn.id, reason, {
+                trackStock: Boolean(settings.stockTrackingEnabled),
+              });
               all = await transactionsRepo.listAll();
               toast.success(`${txn.orderNo} voided.`);
               modal.close();
@@ -165,9 +169,15 @@ export async function renderHistory({ outlet, query: routeQuery }) {
 
     const modal = openModal({
       title: txn.orderNo,
-      subtitle: `${formatDate(txn.createdAt)} · ${formatTime(txn.createdAt, true)} · ${
-        txn.cashierName || txn.cashier
-      }`,
+      subtitle: [
+        formatDate(txn.createdAt),
+        formatTime(txn.createdAt, true),
+        txn.cashierName || txn.cashier,
+        txn.tableName || null,
+        txn.orderSource === 'QR' ? 'ordered by QR' : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
       body: el('div.detail', {}, [renderReceipt({ ...txn, receiptFooter: settings.receiptFooter })]),
       actions,
     });

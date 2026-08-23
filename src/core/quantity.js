@@ -25,16 +25,6 @@ export function parseQuantity(input) {
   return value;
 }
 
-/** The same, but allowing a leading minus — used for stock corrections. */
-export function parseSignedQuantity(input) {
-  const text = String(input ?? '').trim();
-  if (text.startsWith('-')) {
-    const magnitude = parseQuantity(text.slice(1));
-    return magnitude === null ? null : -magnitude;
-  }
-  return parseQuantity(text);
-}
-
 /** Convert a trusted decimal number (seed data, imports) to thousandths. */
 export function toQuantity(value) {
   return Math.round(Number(value) * QUANTITY_SCALE);

@@ -178,6 +178,30 @@ export async function pushOrderStatus(order) {
   }
 }
 
+/**
+ * One order's current state.
+ *
+ * A customer's phone follows only the order it placed. It deliberately does not
+ * pull the whole queue: another table's order is none of its business, and it
+ * has no reason to hold a copy of it.
+ */
+export async function fetchOrder(id) {
+  const config = cloudConfig();
+  if (!config.enabled || !id) return null;
+
+  try {
+    const rows = await request(
+      endpoint(config, `?kind=eq.order&ref=eq.${encodeURIComponent(id)}&select=payload,status&limit=1`),
+      { headers: headers(config) }
+    );
+    const row = rows?.[0];
+    return row ? { ...row.payload, status: row.status || row.payload?.status } : null;
+  } catch (error) {
+    console.error('[TBC POS] could not check the order status', error);
+    return null;
+  }
+}
+
 /* ---------------------------------------------------------------- menu --- */
 
 const MENU_REF = 'published-menu';

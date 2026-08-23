@@ -1,6 +1,6 @@
 /** The counter screen. Fast add, live totals, payment in three keystrokes. */
 
-import { el, clear, debounce, formatTime } from '../core/utils.js';
+import { el, clear, debounce, formatTime, AppError } from '../core/utils.js';
 import { formatMoney, parseRupeesToPaise, formatRate } from '../core/money.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import { searchMenu, getCategories, getItem, onMenuChange } from '../repositories/menu.repo.js';
@@ -10,8 +10,12 @@ import { openModal, confirmDialog } from '../ui/modal.js';
 import { toast, reportError } from '../ui/toast.js';
 import { printReceipt, renderReceipt } from '../ui/receipt.js';
 import { refreshDayChip } from '../ui/shell.js';
-import { PAYMENT_METHODS } from '../config/app.config.js';
+import { PAYMENT_METHODS, TABLE_STATUS } from '../config/app.config.js';
 import { isAdmin } from '../core/session.js';
+import * as tablesRepo from '../repositories/tables.repo.js';
+import { checkAvailability } from '../repositories/inventory.repo.js';
+import { formatQuantityWithUnit } from '../core/quantity.js';
+import { navigate } from '../core/router.js';
 
 export function renderPos({ outlet }) {
   const settings = getSettings();
@@ -142,6 +146,59 @@ export function renderPos({ outlet }) {
     onclick: openPayment,
   });
 
+  const tableButton = el('button.btn.btn--ghost.btn--sm.btn--block', {
+    type: 'button',
+    onclick: openTablePicker,
+  });
+
+  /**
+   * Seat this order at a table. Useful on its own for table service, and it is
+   * what an order arriving from a QR code sets automatically.
+   */
+  function openTablePicker() {
+    const tables = tablesRepo.getTables({ activeOnly: true });
+    const current = cart.getCart().tableId;
+
+    if (!tables.length) {
+      toast.info('No tables set up yet. Add them on the Tables screen.');
+      return;
+    }
+
+    const modal = openModal({
+      title: 'Which table?',
+      size: 'sm',
+      body: el('div.tablepicker', {}, [
+        el('button.tablepicker__option', {
+          type: 'button',
+          class: current ? '' : 'is-active',
+          text: 'No table · counter order',
+          onclick: () => {
+            cart.setTable(null);
+            modal.close();
+          },
+        }),
+        ...tables.map((table) =>
+          el('button.tablepicker__option', {
+            type: 'button',
+            class: table.id === current ? 'is-active' : '',
+            onclick: async () => {
+              cart.setTable(table);
+              // Marking it seated keeps the floor view honest while the order
+              // is being rung up.
+              if ((table.status || TABLE_STATUS.FREE) === TABLE_STATUS.FREE) {
+                await tablesRepo.setStatus(table.id, TABLE_STATUS.SEATED).catch(() => {});
+              }
+              modal.close();
+            },
+          }, [
+            el('span.tablepicker__name', { text: table.name }),
+            el('span.tablepicker__meta', { text: `${table.zone || 'Main'} · ${table.seats || 0} seats` }),
+          ])
+        ),
+      ]),
+    });
+  }
+
   const customerInput = el('input.input.input--sm', {
     type: 'text',
     placeholder: 'Customer name (optional)',
@@ -237,6 +294,12 @@ export function renderPos({ outlet }) {
     payButton.disabled = !snapshot.lines.length;
 
     if (customerInput.value !== snapshot.customerName) customerInput.value = snapshot.customerName;
+
+    tableButton.textContent = snapshot.tableName
+      ? `Table: ${snapshot.tableName}`
+      : 'Assign a table';
+    tableButton.classList.toggle('is-active', Boolean(snapshot.tableId));
+
     paintGrid();
   }
 
@@ -270,6 +333,7 @@ export function renderPos({ outlet }) {
     ]),
     cartList,
     el('div.cart__foot', {}, [
+      tableButton,
       customerInput,
       canDiscount
         ? el('button.btn.btn--ghost.btn--sm.btn--block', {
@@ -487,7 +551,9 @@ export function renderPos({ outlet }) {
       title: 'Confirm payment',
       subtitle: `${snapshot.itemCount} item${snapshot.itemCount === 1 ? '' : 's'} · ${
         snapshot.lines.length
-      } line${snapshot.lines.length === 1 ? '' : 's'}`,
+      } line${snapshot.lines.length === 1 ? '' : 's'}${
+        snapshot.tableName ? ` · ${snapshot.tableName}` : ''
+      }`,
       body: el('div.pay', {}, [
         summary,
         el('div.field', {}, [el('span.field__label', { text: 'Payment method' }), methodButtons]),
@@ -503,6 +569,23 @@ export function renderPos({ outlet }) {
       confirm.disabled = true;
       confirm.textContent = 'Saving…';
       try {
+        // Warn about a shelf that will not cover this order. A customer is
+        // standing at the counter, so this informs rather than blocks unless
+        // the cafe has explicitly asked for it to block.
+        if (settings.stockTrackingEnabled) {
+          const shortages = await checkAvailability(snapshot.lines);
+          if (shortages.length) {
+            const detail = shortages
+              .map((row) => `${row.name}: ${formatQuantityWithUnit(row.have, row.unit)} left`)
+              .join(', ');
+
+            if (settings.blockSalesWhenOutOfStock) {
+              throw new AppError(`Not enough stock — ${detail}.`, 'OUT_OF_STOCK');
+            }
+            toast.warn(`Running short — ${detail}. The sale went through.`);
+          }
+        }
+
         const paise = parseRupeesToPaise(tendered.value);
         const saved = await completeSale({
           paymentMethod: method,
@@ -510,6 +593,10 @@ export function renderPos({ outlet }) {
         });
         modal.close();
         refreshDayChip(document);
+
+        for (const shortage of saved.stockShortages || []) {
+          toast.warn(`${shortage.name} has run out — the shelf is now showing zero.`);
+        }
         showSuccess(saved);
       } catch (error) {
         reportError(error, 'The bill was not saved. Nothing has been charged.');
@@ -560,6 +647,14 @@ export function renderPos({ outlet }) {
     el('section.pos__menu', {}, [
       el('div.pos__toolbar', {}, [
         el('div.search', {}, [search]),
+        settings.qrOrderingEnabled
+          ? el('button.btn.btn--ghost.btn--sm', {
+              type: 'button',
+              text: 'QR orders',
+              title: 'Orders sent in from table QR codes',
+              onclick: () => navigate('/orders'),
+            })
+          : null,
         el('label.toggle', {}, [
           el('input', {
             type: 'checkbox',

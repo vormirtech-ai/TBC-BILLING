@@ -1,12 +1,24 @@
 /** Admin-only menu management: add, edit, price, availability, images. */
 
-import { el, clear, debounce, readFileAsDataUrl, matchesQuery } from '../core/utils.js';
+import {
+  el,
+  clear,
+  debounce,
+  readFileAsDataUrl,
+  matchesQuery,
+  formatDateTime,
+} from '../core/utils.js';
 import { formatMoney, parseRupeesToPaise, parsePercentToBasisPoints, formatRate } from '../core/money.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import * as menuRepo from '../repositories/menu.repo.js';
 import { openModal, confirmDialog } from '../ui/modal.js';
 import { toast, reportError } from '../ui/toast.js';
 import { exportMenu } from '../services/export.service.js';
+import {
+  publishStatus,
+  publishMenuToCloud,
+  downloadMenuSnapshot,
+} from '../services/publicMenu.service.js';
 
 export function renderMenuAdmin({ outlet }) {
   const settings = getSettings();
@@ -297,10 +309,97 @@ export function renderMenuAdmin({ outlet }) {
     )
   );
 
+  /* ---------------------------------------------------------- publish --- */
+
+  /**
+   * The menu customers see is a published snapshot, not this working menu — a
+   * phone that has never opened the site has no way to read the counter's
+   * database. This explains where the customer menu currently comes from and
+   * offers both ways to refresh it.
+   */
+  async function openPublish() {
+    const status = await publishStatus();
+
+    const line = (label, entry) =>
+      el('div.totals__row', {}, [
+        el('span', { text: label }),
+        el('span', {
+          text: entry
+            ? entry.matches
+              ? `Up to date · ${entry.count} items`
+              : `Out of date · published ${formatDateTime(entry.publishedAt)}`
+            : 'Never published',
+          class: entry?.matches ? 'is-positive' : 'is-negative',
+        }),
+      ]);
+
+    const modal = openModal({
+      title: 'Publish the menu for QR ordering',
+      subtitle: `${status.itemCount} available item${status.itemCount === 1 ? '' : 's'} on the working menu`,
+      body: el('div.stack', {}, [
+        el('p.modal__text', {
+          text:
+            'A customer scanning a table code reads a published copy of the menu. Publish after changing prices so their phone shows what you actually charge.',
+        }),
+        el('div.cart__totals', {}, [
+          line('In the site files', status.file),
+          status.cloudEnabled ? line('Live ordering backend', status.cloud) : null,
+        ]),
+        status.cloudEnabled
+          ? null
+          : el('p.hint', {
+              text:
+                'Live ordering is switched off, so the site file is the only published copy. Download it, put it in the data folder of the site, and deploy as usual.',
+            }),
+      ]),
+      actions: [
+        el('button.btn.btn--ghost', { type: 'button', text: 'Close', onclick: () => modal.close() }),
+        status.cloudEnabled
+          ? el('button.btn.btn--ghost', {
+              type: 'button',
+              text: 'Publish live',
+              onclick: async (event) => {
+                const button = event.currentTarget;
+                button.disabled = true;
+                try {
+                  const result = await publishMenuToCloud();
+                  if (result.sent) toast.success(`${result.count} items published. Phones see them now.`);
+                  else toast.error('The menu could not be published. Check the connection in Settings.');
+                  modal.close();
+                } catch (error) {
+                  reportError(error);
+                  button.disabled = false;
+                }
+              },
+            })
+          : null,
+        el('button.btn.btn--primary', {
+          type: 'button',
+          text: 'Download menu.published.json',
+          onclick: () => {
+            try {
+              const result = downloadMenuSnapshot();
+              toast.success(`${result.filename} downloaded — put it in the site's data folder.`);
+              modal.close();
+            } catch (error) {
+              reportError(error);
+            }
+          },
+        }),
+      ],
+    });
+  }
+
   const page = el('div.page', {}, [
     el('div.page__head', {}, [
       el('div', {}, [el('h1.page__title', { text: 'Menu' }), countNote]),
       el('div.page__actions', {}, [
+        el('button.btn.btn--ghost', {
+          type: 'button',
+          text: 'Publish for QR ordering',
+          title: 'Make this menu the one customers see when they scan a table code',
+          onclick: openPublish,
+        }),
         el('button.btn.btn--ghost', {
           type: 'button',
           text: 'Export menu',

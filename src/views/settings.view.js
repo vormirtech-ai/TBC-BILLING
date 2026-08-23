@@ -12,6 +12,8 @@ import { exportBackup, inspectBackup, restoreBackup } from '../services/backup.s
 import { openModal, confirmDialog } from '../ui/modal.js';
 import { toast, reportError } from '../ui/toast.js';
 import { APP } from '../config/app.config.js';
+import { testConnection } from '../services/cloudSync.service.js';
+import * as tablesRepo from '../repositories/tables.repo.js';
 
 function section(title, description, body) {
   return el('section.panel.panel--wide', {}, [
@@ -413,6 +415,229 @@ export async function renderSettings({ outlet }) {
     });
   }
 
+  /* ------------------------------------------------------------- stock --- */
+
+  const stockTracking = checkField(
+    'Take ingredients off the shelf when something sells',
+    settings.stockTrackingEnabled,
+    'Only affects menu items that have a recipe. Everything else sells exactly as before.'
+  );
+  const blockOutOfStock = checkField(
+    'Refuse a sale when an ingredient has run out',
+    settings.blockSalesWhenOutOfStock,
+    'Off by default. A customer is standing at the counter, so the usual answer is to warn and let the sale through.'
+  );
+
+  const stockForm = el('div.formgrid', {}, [
+    stockTracking.field,
+    blockOutOfStock.field,
+    el('div.form__actions', {}, [
+      el('button.btn.btn--primary', {
+        type: 'button',
+        text: 'Save stock settings',
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            await saveSettings({
+              stockTrackingEnabled: stockTracking.input.checked,
+              blockSalesWhenOutOfStock: blockOutOfStock.input.checked,
+            });
+            toast.success('Stock settings saved.');
+          } catch (error) {
+            reportError(error);
+          } finally {
+            button.disabled = false;
+          }
+        },
+      }),
+    ]),
+  ]);
+
+  /* -------------------------------------------------------- QR ordering --- */
+
+  const qrEnabled = checkField(
+    'Use table QR codes',
+    settings.qrOrderingEnabled,
+    'Switches on the Orders screen and makes table codes work.'
+  );
+  const qrAcceptsOrders = checkField(
+    'Let customers send an order from their phone',
+    settings.qrOrderingAcceptsOrders,
+    'Turn this off to use the codes as a menu only.'
+  );
+  const qrNote = textField('Message shown after ordering', settings.qrOrderNote, {
+    placeholder: 'A member of staff will bring your order over.',
+  });
+  const siteUrl = textField('Public web address', settings.publicSiteUrl, {
+    placeholder: tablesRepo.siteBaseUrl(),
+    hint: 'Leave blank and the QR codes use whatever address this page is open at, which is almost always right.',
+  });
+
+  const qrForm = el('div.formgrid', {}, [
+    qrEnabled.field,
+    qrAcceptsOrders.field,
+    qrNote.field,
+    siteUrl.field,
+    el('div.form__actions', {}, [
+      el('button.btn.btn--primary', {
+        type: 'button',
+        text: 'Save QR settings',
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            const url = siteUrl.input.value.trim();
+            if (url && !/^https?:\/\//i.test(url)) {
+              toast.error('The web address must start with http:// or https://');
+              return;
+            }
+            await saveSettings({
+              qrOrderingEnabled: qrEnabled.input.checked,
+              qrOrderingAcceptsOrders: qrAcceptsOrders.input.checked,
+              qrOrderNote: qrNote.input.value.trim(),
+              publicSiteUrl: url,
+            });
+            toast.success('QR settings saved. Reprint table cards if the address changed.');
+          } catch (error) {
+            reportError(error);
+          } finally {
+            button.disabled = false;
+          }
+        },
+      }),
+    ]),
+  ]);
+
+  /* ------------------------------------------------------ live ordering --- */
+
+  const cloudEnabled = checkField(
+    'Send orders straight to this counter',
+    settings.cloudSyncEnabled,
+    'Without this, an order from a customer’s phone is handed over as a code the counter scans.'
+  );
+  const cloudUrl = textField('Project URL', settings.cloudSyncUrl, {
+    placeholder: 'https://xxxxxxxx.supabase.co',
+  });
+  const cloudKey = textField('Public API key', settings.cloudSyncKey, {
+    placeholder: 'The anon public key',
+    hint: 'Use the anon public key, never the service role key.',
+  });
+  const cloudTable = textField('Table name', settings.cloudSyncTable, { placeholder: 'tbc_sync' });
+  const cloudPoll = textField('Check for orders every (seconds)', settings.cloudSyncPollSeconds, {
+    inputmode: 'numeric',
+  });
+  const cloudResult = el('p.hint');
+
+  const cloudForm = el('div.formgrid', {}, [
+    cloudEnabled.field,
+    cloudUrl.field,
+    cloudKey.field,
+    cloudTable.field,
+    cloudPoll.field,
+    cloudResult,
+    el('div.form__actions', {}, [
+      el('button.btn.btn--ghost', {
+        type: 'button',
+        text: 'Test connection',
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          cloudResult.textContent = 'Checking…';
+          cloudResult.className = 'hint';
+          try {
+            const result = await testConnection({
+              url: cloudUrl.input.value.trim().replace(/\/+$/, ''),
+              key: cloudKey.input.value.trim(),
+              table: cloudTable.input.value.trim() || 'tbc_sync',
+            });
+            cloudResult.textContent = result.message;
+            cloudResult.className = result.ok ? 'hint is-positive' : 'hint is-negative';
+          } finally {
+            button.disabled = false;
+          }
+        },
+      }),
+      el('button.btn.btn--primary', {
+        type: 'button',
+        text: 'Save live ordering',
+        onclick: async (event) => {
+          const seconds = Number(cloudPoll.input.value);
+          if (!Number.isInteger(seconds) || seconds < 5 || seconds > 600) {
+            toast.error('Check for orders every 5 to 600 seconds.');
+            return;
+          }
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            await saveSettings({
+              cloudSyncEnabled: cloudEnabled.input.checked,
+              cloudSyncUrl: cloudUrl.input.value.trim().replace(/\/+$/, ''),
+              cloudSyncKey: cloudKey.input.value.trim(),
+              cloudSyncTable: cloudTable.input.value.trim() || 'tbc_sync',
+              cloudSyncPollSeconds: seconds,
+            });
+            toast.success('Live ordering saved. Reload the page to start collecting orders.');
+          } catch (error) {
+            reportError(error);
+          } finally {
+            button.disabled = false;
+          }
+        },
+      }),
+    ]),
+  ]);
+
+  /* ------------------------------------------------------------- shifts --- */
+
+  const shiftStart = textField('Default shift start', settings.defaultShiftStart, {
+    placeholder: '09:00',
+  });
+  const shiftEnd = textField('Default shift finish', settings.defaultShiftEnd, {
+    placeholder: '17:00',
+  });
+  const breakMinutes = textField('Default unpaid break (minutes)', settings.defaultBreakMinutes, {
+    inputmode: 'numeric',
+  });
+
+  const shiftForm = el('div.formgrid', {}, [
+    shiftStart.field,
+    shiftEnd.field,
+    breakMinutes.field,
+    el('div.form__actions', {}, [
+      el('button.btn.btn--primary', {
+        type: 'button',
+        text: 'Save shift defaults',
+        onclick: async (event) => {
+          const isTime = (value) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(String(value).trim());
+          if (!isTime(shiftStart.input.value) || !isTime(shiftEnd.input.value)) {
+            toast.error('Enter shift times as HH:MM, for example 09:00.');
+            return;
+          }
+          const minutes = Number(breakMinutes.input.value);
+          if (!Number.isInteger(minutes) || minutes < 0 || minutes > 480) {
+            toast.error('The default break must be between 0 and 480 minutes.');
+            return;
+          }
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            await saveSettings({
+              defaultShiftStart: shiftStart.input.value.trim(),
+              defaultShiftEnd: shiftEnd.input.value.trim(),
+              defaultBreakMinutes: minutes,
+            });
+            toast.success('Shift defaults saved.');
+          } catch (error) {
+            reportError(error);
+          } finally {
+            button.disabled = false;
+          }
+        },
+      }),
+    ]),
+  ]);
+
   /* ------------------------------------------------------------ backup --- */
 
   const restoreInput = el('input', {
@@ -582,6 +807,22 @@ export async function renderSettings({ outlet }) {
           usersTable,
         ])
       ),
+      section(
+        'Stock',
+        'Recipes are set up on the Stock screen. These switches decide what a sale does with them.',
+        stockForm
+      ),
+      section(
+        'QR ordering',
+        'Table codes are generated on the Tables screen. Publish the menu from the Menu screen after changing prices.',
+        qrForm
+      ),
+      section(
+        'Live ordering',
+        'Optional. Without it the app runs entirely on this device and orders are handed over as a code. With it, an order sent from any phone lands on this counter by itself. Setup takes about five minutes — the steps are in the README.',
+        cloudForm
+      ),
+      section('Shift defaults', 'Used when a new shift or attendance record is created.', shiftForm),
       section('Backup and restore', null, backupBody),
       section('Storage and maintenance', null, maintenance),
     ]),

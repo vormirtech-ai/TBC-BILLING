@@ -14,18 +14,49 @@ import * as menuRepo from '../repositories/menu.repo.js';
 import * as transactionsRepo from '../repositories/transactions.repo.js';
 import * as daysRepo from '../repositories/businessDays.repo.js';
 import * as usersRepo from '../repositories/users.repo.js';
+import * as inventoryRepo from '../repositories/inventory.repo.js';
+import * as staffRepo from '../repositories/staff.repo.js';
+import * as tablesRepo from '../repositories/tables.repo.js';
+import * as ordersRepo from '../repositories/onlineOrders.repo.js';
 import { getSettings, replaceSettings, loadSettings } from '../repositories/settings.repo.js';
 
 const FORMAT = 'tbc-pos-backup';
-const FORMAT_VERSION = 1;
+/**
+ * 2 added stock, staff, tables and QR orders. Version 1 files still restore —
+ * their missing sections simply come back empty, which is exactly what a till
+ * that never had stock should get.
+ */
+const FORMAT_VERSION = 2;
 
 export async function buildBackup() {
-  const [menu, transactions, businessDays, users, counters] = await Promise.all([
+  const [
+    menu,
+    transactions,
+    businessDays,
+    users,
+    counters,
+    inventory,
+    stockMovements,
+    recipes,
+    staff,
+    shifts,
+    attendance,
+    tables,
+    onlineOrders,
+  ] = await Promise.all([
     getAll(STORES.MENU),
     getAll(STORES.TRANSACTIONS),
     getAll(STORES.BUSINESS_DAYS),
     usersRepo.exportUsers(),
     getAll(STORES.COUNTERS),
+    getAll(STORES.INVENTORY),
+    getAll(STORES.STOCK_MOVEMENTS),
+    getAll(STORES.RECIPES),
+    getAll(STORES.STAFF),
+    getAll(STORES.SHIFTS),
+    getAll(STORES.ATTENDANCE),
+    getAll(STORES.TABLES),
+    getAll(STORES.ONLINE_ORDERS),
   ]);
 
   return {
@@ -38,8 +69,26 @@ export async function buildBackup() {
       transactions: transactions.length,
       businessDays: businessDays.length,
       users: users.length,
+      inventory: inventory.length,
+      staff: staff.length,
+      tables: tables.length,
     },
-    data: { settings: getSettings(), menu, transactions, businessDays, users, counters },
+    data: {
+      settings: getSettings(),
+      menu,
+      transactions,
+      businessDays,
+      users,
+      counters,
+      inventory,
+      stockMovements,
+      recipes,
+      staff,
+      shifts,
+      attendance,
+      tables,
+      onlineOrders,
+    },
   };
 }
 
@@ -96,6 +145,9 @@ export async function inspectBackup(file) {
       transactions: data.transactions.length,
       businessDays: data.businessDays.length,
       users: (data.users || []).length,
+      inventory: (data.inventory || []).length,
+      staff: (data.staff || []).length,
+      tables: (data.tables || []).length,
     },
     range: dates.length ? { from: dates[0], to: dates[dates.length - 1] } : null,
     data,
@@ -116,7 +168,22 @@ export async function restoreBackup(inspected) {
   const safetyName = `Cafe_POS_Before_Restore_${toDateKey()}.json`;
   downloadBlob(safetyBlob, safetyName);
 
-  const { settings, menu, transactions, businessDays, users, counters } = inspected.data;
+  const {
+    settings,
+    menu,
+    transactions,
+    businessDays,
+    users,
+    counters,
+    inventory,
+    stockMovements,
+    recipes,
+    staff,
+    shifts,
+    attendance,
+    tables,
+    onlineOrders,
+  } = inspected.data;
 
   if (settings) await replaceSettings(settings);
   await menuRepo.replaceAll(menu);
@@ -126,6 +193,14 @@ export async function restoreBackup(inspected) {
   );
   await daysRepo.replaceAll(businessDays);
   if (Array.isArray(users) && users.length) await usersRepo.replaceAll(users);
+
+  // Sections a version 1 backup simply does not have. Passing undefined clears
+  // the store, which is the right result: restoring an older file should not
+  // leave today's stock sitting behind it.
+  await inventoryRepo.replaceAll(inventory, stockMovements, recipes);
+  await staffRepo.replaceAll(staff, shifts, attendance);
+  await tablesRepo.replaceAll(tables);
+  await ordersRepo.replaceAll(onlineOrders);
 
   await loadSettings();
   await menuRepo.loadMenu();
