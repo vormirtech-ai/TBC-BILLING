@@ -1,0 +1,215 @@
+/** Menu items: read by everyone, written by admins only. */
+
+import { STORES, getAll, put, remove, putMany, clearStore, getByKey } from '../db/database.js';
+import { requireAdmin } from '../core/session.js';
+import { AppError, uid, matchesQuery } from '../core/utils.js';
+import { MENU_SEED } from '../data/menu.seed.js';
+import { rupeesToPaise } from '../core/money.js';
+
+let cache = null;
+const listeners = new Set();
+
+export function onMenuChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function announce() {
+  listeners.forEach((fn) => fn(cache));
+}
+
+function sortItems(items) {
+  return items.sort(
+    (a, b) =>
+      (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, 'en')
+  );
+}
+
+export async function loadMenu() {
+  cache = sortItems(await getAll(STORES.MENU));
+  return cache;
+}
+
+/** Synchronous read of the cached menu — the POS grid renders from this. */
+export function getMenu() {
+  return cache || [];
+}
+
+export function getItem(id) {
+  return getMenu().find((item) => item.id === id) || null;
+}
+
+export function getCategories({ includeEmpty = true } = {}) {
+  const seen = [];
+  for (const item of getMenu()) {
+    if (!seen.includes(item.category)) seen.push(item.category);
+  }
+  return includeEmpty ? seen : seen.filter((c) => getMenu().some((i) => i.category === c && i.available));
+}
+
+export function searchMenu({ query = '', category = 'All', availableOnly = false } = {}) {
+  return getMenu().filter((item) => {
+    if (availableOnly && !item.available) return false;
+    if (category && category !== 'All' && item.category !== category) return false;
+    if (!query) return true;
+    return (
+      matchesQuery(item.name, query) ||
+      matchesQuery(item.category, query) ||
+      matchesQuery(item.description, query)
+    );
+  });
+}
+
+function validate(draft, { existingId = null } = {}) {
+  const name = String(draft.name || '').trim();
+  const category = String(draft.category || '').trim();
+
+  if (!name) throw new AppError('Give the item a name.', 'VALIDATION');
+  if (name.length > 80) throw new AppError('Item names are limited to 80 characters.', 'VALIDATION');
+  if (!category) throw new AppError('Choose or type a category.', 'VALIDATION');
+
+  const price = Number(draft.price);
+  if (!Number.isInteger(price) || price < 0) {
+    throw new AppError('Enter a valid price, for example 180 or 180.50.', 'VALIDATION');
+  }
+  if (price > 100000000) throw new AppError('That price looks too large.', 'VALIDATION');
+
+  const clash = getMenu().find(
+    (item) =>
+      item.id !== existingId &&
+      item.name.toLowerCase() === name.toLowerCase() &&
+      item.category.toLowerCase() === category.toLowerCase()
+  );
+  if (clash) throw new AppError(`"${name}" already exists in ${category}.`, 'DUPLICATE');
+
+  return { name, category, price };
+}
+
+export async function createItem(draft) {
+  requireAdmin('adding menu items');
+  const { name, category, price } = validate(draft);
+  const now = new Date().toISOString();
+
+  const item = {
+    id: uid('itm'),
+    name,
+    category,
+    price,
+    description: String(draft.description || '').trim(),
+    image: draft.image || '',
+    available: draft.available !== false,
+    taxRate: draft.taxRate === null || draft.taxRate === undefined ? null : Number(draft.taxRate),
+    sortOrder: getMenu().length,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await put(STORES.MENU, item);
+  cache = sortItems([...getMenu(), item]);
+  announce();
+  return item;
+}
+
+export async function updateItem(id, patch) {
+  requireAdmin('editing menu items');
+  const existing = await getByKey(STORES.MENU, id);
+  if (!existing) throw new AppError('That item is no longer in the menu.', 'NOT_FOUND');
+
+  const merged = { ...existing, ...patch };
+  const { name, category, price } = validate(merged, { existingId: id });
+
+  const item = {
+    ...merged,
+    name,
+    category,
+    price,
+    description: String(merged.description || '').trim(),
+    taxRate: merged.taxRate === null || merged.taxRate === undefined ? null : Number(merged.taxRate),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await put(STORES.MENU, item);
+  cache = sortItems(getMenu().map((row) => (row.id === id ? item : row)));
+  announce();
+  return item;
+}
+
+/**
+ * Availability toggle is the preferred alternative to deleting: past orders
+ * keep referencing the item id and nothing in history breaks.
+ */
+export async function setAvailability(id, available) {
+  requireAdmin('changing item availability');
+  return updateItem(id, { available: Boolean(available) });
+}
+
+export async function deleteItem(id) {
+  requireAdmin('deleting menu items');
+  await remove(STORES.MENU, id);
+  cache = getMenu().filter((item) => item.id !== id);
+  announce();
+  return true;
+}
+
+export async function reorderCategory(category, orderedIds) {
+  requireAdmin('reordering the menu');
+  const updates = [];
+  orderedIds.forEach((id, index) => {
+    const item = getItem(id);
+    if (item && item.category === category) updates.push({ ...item, sortOrder: index });
+  });
+  if (updates.length) {
+    await putMany(STORES.MENU, updates);
+    await loadMenu();
+    announce();
+  }
+}
+
+/** Menu items ready for the database, straight from the printed menu card. */
+export function buildSeedItems() {
+  const now = new Date().toISOString();
+  return MENU_SEED.map((item, index) => ({
+    id: uid('itm'),
+    name: item.name,
+    category: item.category,
+    price: rupeesToPaise(item.price),
+    description: item.description || '',
+    image: '',
+    available: true,
+    taxRate: null,
+    sortOrder: index,
+    createdAt: now,
+    updatedAt: now,
+  }));
+}
+
+export async function seedMenuIfEmpty() {
+  const existing = await getAll(STORES.MENU);
+  if (existing.length) {
+    cache = sortItems(existing);
+    return { seeded: false, count: existing.length };
+  }
+  const items = buildSeedItems();
+  await putMany(STORES.MENU, items);
+  cache = sortItems(items);
+  announce();
+  return { seeded: true, count: items.length };
+}
+
+/** Admin action: throw away the working menu and reload from menu.seed.js. */
+export async function resetMenuToSeed() {
+  requireAdmin('resetting the menu');
+  await clearStore(STORES.MENU);
+  const items = buildSeedItems();
+  await putMany(STORES.MENU, items);
+  cache = sortItems(items);
+  announce();
+  return items.length;
+}
+
+/** Used by backup restore. */
+export async function replaceAll(items) {
+  await clearStore(STORES.MENU);
+  if (items.length) await putMany(STORES.MENU, items);
+  await loadMenu();
+  announce();
+}

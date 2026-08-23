@@ -1,0 +1,15 @@
+{
+  "name": "The Baruch Cafe POS",
+  "short_name": "TBC POS",
+  "description": "Billing and point-of-sale counter for The Baruch Cafe.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F7F2E9",
+  "theme_color": "#241B16",
+  "icons": [
+    { "src": "assets/logo.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" },
+    { "src": "assets/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

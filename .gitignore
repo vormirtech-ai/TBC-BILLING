@@ -1,0 +1,15 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Local exports and backups — never commit real sales data
+*.xlsx
+Cafe_POS_Backup_*.json
+Cafe_POS_Before_Restore_*.json
+
+# Nothing here is built, but keep these out anyway
+node_modules/
+dist/
