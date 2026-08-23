@@ -18,6 +18,16 @@ export const STORES = {
   SETTINGS: 'settings',
   COUNTERS: 'counters',
   USERS: 'users',
+
+  /* Added with the cafe-floor features: stock, staff, tables, QR ordering. */
+  INVENTORY: 'inventory',
+  STOCK_MOVEMENTS: 'stockMovements',
+  RECIPES: 'recipes',
+  STAFF: 'staff',
+  SHIFTS: 'shifts',
+  ATTENDANCE: 'attendance',
+  TABLES: 'tables',
+  ONLINE_ORDERS: 'onlineOrders',
 };
 
 let dbPromise = null;
@@ -48,6 +58,59 @@ function upgrade(db) {
   }
   if (!db.objectStoreNames.contains(STORES.USERS)) {
     db.createObjectStore(STORES.USERS, { keyPath: 'username' });
+  }
+
+  /* ----------------------------------------------------------- stock --- */
+
+  if (!db.objectStoreNames.contains(STORES.INVENTORY)) {
+    const inventory = db.createObjectStore(STORES.INVENTORY, { keyPath: 'id' });
+    inventory.createIndex('name', 'name', { unique: false });
+    inventory.createIndex('category', 'category', { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.STOCK_MOVEMENTS)) {
+    const movements = db.createObjectStore(STORES.STOCK_MOVEMENTS, { keyPath: 'id' });
+    movements.createIndex('stockId', 'stockId', { unique: false });
+    movements.createIndex('businessDate', 'businessDate', { unique: false });
+    movements.createIndex('kind', 'kind', { unique: false });
+  }
+  // Keyed by menu item id: one recipe per menu item, so a lookup during a sale
+  // is a single get() rather than a scan.
+  if (!db.objectStoreNames.contains(STORES.RECIPES)) {
+    db.createObjectStore(STORES.RECIPES, { keyPath: 'menuItemId' });
+  }
+
+  /* ----------------------------------------------------------- staff --- */
+
+  if (!db.objectStoreNames.contains(STORES.STAFF)) {
+    const staff = db.createObjectStore(STORES.STAFF, { keyPath: 'id' });
+    staff.createIndex('name', 'name', { unique: false });
+    staff.createIndex('username', 'username', { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.SHIFTS)) {
+    const shifts = db.createObjectStore(STORES.SHIFTS, { keyPath: 'id' });
+    shifts.createIndex('date', 'date', { unique: false });
+    shifts.createIndex('staffId', 'staffId', { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.ATTENDANCE)) {
+    const attendance = db.createObjectStore(STORES.ATTENDANCE, { keyPath: 'id' });
+    attendance.createIndex('date', 'date', { unique: false });
+    attendance.createIndex('staffId', 'staffId', { unique: false });
+  }
+
+  /* ------------------------------------------------- tables and QR --- */
+
+  if (!db.objectStoreNames.contains(STORES.TABLES)) {
+    const tables = db.createObjectStore(STORES.TABLES, { keyPath: 'id' });
+    // The token is what a QR code carries, so it has to resolve to exactly one
+    // table.
+    tables.createIndex('token', 'token', { unique: true });
+    tables.createIndex('zone', 'zone', { unique: false });
+  }
+  if (!db.objectStoreNames.contains(STORES.ONLINE_ORDERS)) {
+    const orders = db.createObjectStore(STORES.ONLINE_ORDERS, { keyPath: 'id' });
+    orders.createIndex('status', 'status', { unique: false });
+    orders.createIndex('placedAt', 'placedAt', { unique: false });
+    orders.createIndex('tableId', 'tableId', { unique: false });
   }
 }
 

@@ -21,6 +21,7 @@ import {
 } from '../db/database.js';
 import { requireAdmin, requireSignedIn } from '../core/session.js';
 import { AppError, uid, pad, matchesQuery } from '../core/utils.js';
+import { applySaleToStock } from './inventory.repo.js';
 
 const COUNTER_KEY = 'orderNo';
 
@@ -95,8 +96,10 @@ function nextDayNumber(daysStore, startNumber) {
  * Persist a finished order.
  *
  * @param {object} draft  fully-priced order (see order.service.js)
- * @param {{orderPrefix: string, orderNumberPadding: number, businessDayStartNumber: number}} options
- * @returns {Promise<object>} the saved transaction, with orderNo and dayNumber filled in
+ * @param {{orderPrefix:string, orderNumberPadding:number, businessDayStartNumber:number,
+ *          trackStock?:boolean}} options
+ * @returns {Promise<object>} the saved transaction, with orderNo, dayNumber and
+ *   any stock shortages the sale ran into
  */
 export async function commitTransaction(draft, options) {
   const session = requireSignedIn();
@@ -108,8 +111,15 @@ export async function commitTransaction(draft, options) {
     throw new AppError('The bill total is not valid. Clear the order and try again.', 'BAD_TOTAL');
   }
 
+  // Stock moves in the same transaction as the sale, so a bill can never be
+  // saved while the ingredients it used stay on the shelf.
+  const storeNames = [STORES.COUNTERS, STORES.TRANSACTIONS, STORES.BUSINESS_DAYS];
+  if (options.trackStock) {
+    storeNames.push(STORES.RECIPES, STORES.INVENTORY, STORES.STOCK_MOVEMENTS);
+  }
+
   return runTransaction(
-    [STORES.COUNTERS, STORES.TRANSACTIONS, STORES.BUSINESS_DAYS],
+    storeNames,
     'readwrite',
     async (stores) => {
       const counters = stores[STORES.COUNTERS];
@@ -161,7 +171,13 @@ export async function commitTransaction(draft, options) {
         lastTransactionAt: record.createdAt,
       });
 
-      return record;
+      // 5. Draw down the ingredients this sale used.
+      let stock = { deducted: 0, shortages: [] };
+      if (options.trackStock) stock = await applySaleToStock(stores, record, -1);
+
+      // The shortages ride along for the counter to show; they are not part of
+      // the stored bill.
+      return { ...record, stockShortages: stock.shortages };
     }
   );
 }
@@ -170,13 +186,16 @@ export async function commitTransaction(draft, options) {
  * Cancel a sale without erasing it. The record stays in history and in exports,
  * flagged VOID and excluded from totals, so the audit trail is unbroken.
  */
-export async function voidTransaction(id, reason) {
+export async function voidTransaction(id, reason, { trackStock = false } = {}) {
   const session = requireAdmin('voiding a bill');
   const text = String(reason || '').trim();
   if (!text) throw new AppError('Give a reason for voiding this bill.', 'VALIDATION');
 
+  const storeNames = [STORES.TRANSACTIONS, STORES.BUSINESS_DAYS];
+  if (trackStock) storeNames.push(STORES.RECIPES, STORES.INVENTORY, STORES.STOCK_MOVEMENTS);
+
   return runTransaction(
-    [STORES.TRANSACTIONS, STORES.BUSINESS_DAYS],
+    storeNames,
     'readwrite',
     async (stores) => {
       const transactions = stores[STORES.TRANSACTIONS];
@@ -206,6 +225,10 @@ export async function voidTransaction(id, reason) {
           totalSales: Math.max(0, day.totalSales - record.grandTotal),
         });
       }
+
+      // A voided bill was never sold, so its ingredients go back on the shelf.
+      if (trackStock) await applySaleToStock(stores, voided, 1);
+
       return voided;
     }
   );

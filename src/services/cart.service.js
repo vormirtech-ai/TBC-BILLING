@@ -13,6 +13,7 @@
  */
 
 import { AppError, uid } from '../core/utils.js';
+import { ORDER_SOURCES } from '../config/app.config.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import { priceOrder } from './pricing.js';
 
@@ -24,6 +25,13 @@ const state = {
   discount: { type: 'PERCENT', value: 0 },
   customerName: '',
   note: '',
+  /** Which table this order is for, when the cafe seats people. */
+  tableId: '',
+  tableName: '',
+  /** COUNTER, or QR when the order arrived from a customer's phone. */
+  source: ORDER_SOURCES.COUNTER,
+  /** Set when the order came in through a table QR code. */
+  onlineOrderId: '',
 };
 
 const listeners = new Set();
@@ -60,6 +68,10 @@ export function restoreDraft() {
     state.discount = saved.discount || { type: 'PERCENT', value: 0 };
     state.customerName = saved.customerName || '';
     state.note = saved.note || '';
+    state.tableId = saved.tableId || '';
+    state.tableName = saved.tableName || '';
+    state.source = saved.source || ORDER_SOURCES.COUNTER;
+    state.onlineOrderId = saved.onlineOrderId || '';
     announce();
     return state.lines.length > 0;
   } catch {
@@ -92,6 +104,10 @@ export function getCart() {
     discount: { ...state.discount },
     customerName: state.customerName,
     note: state.note,
+    tableId: state.tableId,
+    tableName: state.tableName,
+    source: state.source,
+    onlineOrderId: state.onlineOrderId,
   };
 }
 
@@ -190,11 +206,53 @@ export function setNote(note) {
   persist();
 }
 
+/** Seat this order at a table, or pass null to take it off one. */
+export function setTable(table) {
+  state.tableId = table?.id || '';
+  state.tableName = table?.name || '';
+  announce();
+  return getCart();
+}
+
+export function getTableId() {
+  return state.tableId;
+}
+
+/**
+ * Load a customer's QR order onto the counter, ready to be billed. The lines
+ * carry the prices the customer was shown, exactly as a counter order would.
+ */
+export function loadOnlineOrder(order, table) {
+  state.lines = order.lines.map((line) => ({
+    lineId: uid('ln'),
+    itemId: line.itemId,
+    name: line.name,
+    category: line.category || '',
+    unitPrice: line.unitPrice,
+    quantity: line.quantity,
+    taxRate: line.taxRate ?? null,
+    note: line.note || '',
+  }));
+  state.discount = { type: 'PERCENT', value: 0 };
+  state.customerName = order.customerName || '';
+  state.note = order.note || '';
+  state.tableId = table?.id || order.tableId || '';
+  state.tableName = table?.name || order.tableName || '';
+  state.source = ORDER_SOURCES.QR;
+  state.onlineOrderId = order.id;
+  announce();
+  return getCart();
+}
+
 export function clearCart() {
   state.lines = [];
   state.discount = { type: 'PERCENT', value: 0 };
   state.customerName = '';
   state.note = '';
+  state.tableId = '';
+  state.tableName = '';
+  state.source = ORDER_SOURCES.COUNTER;
+  state.onlineOrderId = '';
   try {
     localStorage.removeItem(DRAFT_KEY);
   } catch {

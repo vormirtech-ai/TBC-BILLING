@@ -6,6 +6,26 @@ import { AppError, uid, matchesQuery } from '../core/utils.js';
 import { MENU_SEED } from '../data/menu.seed.js';
 import { rupeesToPaise } from '../core/money.js';
 
+/**
+ * A stable, device-independent code for a menu item.
+ *
+ * Item ids are generated per device, so the counter's "Cappuccino" and a
+ * customer's phone's "Cappuccino" have different ids even though they are the
+ * same drink. Anything that crosses between devices — a QR order, a published
+ * menu — travels by this code instead, which is derived from the item's own
+ * name and category and so comes out the same everywhere.
+ */
+export function menuCode(name, category) {
+  const input = `${String(category || '').trim().toLowerCase()}|${String(name || '')
+    .trim()
+    .toLowerCase()}`;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash = Math.imul(hash ^ input.charCodeAt(i), 0x01000193) >>> 0;
+  }
+  return hash.toString(36).padStart(7, '0').slice(-7);
+}
+
 let cache = null;
 const listeners = new Set();
 
@@ -25,8 +45,27 @@ function sortItems(items) {
 }
 
 export async function loadMenu() {
-  cache = sortItems(await getAll(STORES.MENU));
+  const rows = await getAll(STORES.MENU);
+
+  // Menus created before item codes existed get one now, so a till that has
+  // been running since version 1 can take QR orders without being re-seeded.
+  const missing = rows.filter((item) => !item.code);
+  if (missing.length) {
+    const patched = missing.map((item) => ({ ...item, code: menuCode(item.name, item.category) }));
+    await putMany(STORES.MENU, patched);
+    const byId = new Map(patched.map((item) => [item.id, item]));
+    for (let i = 0; i < rows.length; i++) {
+      if (byId.has(rows[i].id)) rows[i] = byId.get(rows[i].id);
+    }
+  }
+
+  cache = sortItems(rows);
   return cache;
+}
+
+/** Find an item by its stable code — how an order from a phone is resolved. */
+export function getItemByCode(code) {
+  return getMenu().find((item) => item.code === code) || null;
 }
 
 /** Synchronous read of the cached menu — the POS grid renders from this. */
@@ -91,6 +130,7 @@ export async function createItem(draft) {
 
   const item = {
     id: uid('itm'),
+    code: menuCode(name, category),
     name,
     category,
     price,
@@ -119,6 +159,9 @@ export async function updateItem(id, patch) {
 
   const item = {
     ...merged,
+    // The code follows the name and category, so a renamed item is a new item
+    // as far as other devices are concerned — which is the honest answer.
+    code: menuCode(name, category),
     name,
     category,
     price,
@@ -169,6 +212,7 @@ export function buildSeedItems() {
   const now = new Date().toISOString();
   return MENU_SEED.map((item, index) => ({
     id: uid('itm'),
+    code: menuCode(item.name, item.category),
     name: item.name,
     category: item.category,
     price: rupeesToPaise(item.price),

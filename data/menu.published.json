@@ -1,0 +1,349 @@
+{
+  "format": "tbc-published-menu",
+  "formatVersion": 1,
+  "publishedAt": "2026-08-23T20:02:32.781Z",
+  "cafeName": "The Baruch Cafe",
+  "tagline": "Coffee • Eats • Community",
+  "currencySymbol": "₹",
+  "orderingNote": "A member of staff will bring your order over and take payment at the table.",
+  "acceptsOrders": true,
+  "taxNote": "",
+  "items": [
+    {
+      "code": "1osffhg",
+      "name": "Espresso",
+      "category": "Hot",
+      "description": "Rich and concentrated espresso with a balanced crema.",
+      "price": 14000
+    },
+    {
+      "code": "027b63f",
+      "name": "Americano",
+      "category": "Hot",
+      "description": "Espresso gently diluted with hot water for a clean, bold cup.",
+      "price": 17000
+    },
+    {
+      "code": "1xogwyr",
+      "name": "Cappuccino",
+      "category": "Hot",
+      "description": "Espresso, silky steamed milk and a generous layer of foam.",
+      "price": 18000
+    },
+    {
+      "code": "0sn7kfa",
+      "name": "Latte",
+      "category": "Hot",
+      "description": "Smooth espresso blended with creamy steamed milk and light foam.",
+      "price": 18000
+    },
+    {
+      "code": "1d0x3ba",
+      "name": "Mocha",
+      "category": "Hot",
+      "description": "Espresso, chocolate and steamed milk for a rich, indulgent cup.",
+      "price": 22000
+    },
+    {
+      "code": "0d4jody",
+      "name": "Spanish Latte",
+      "category": "Hot",
+      "description": "Bold espresso balanced with sweetened condensed milk and silky milk.",
+      "price": 23000
+    },
+    {
+      "code": "0s2pkvu",
+      "name": "Cortado",
+      "category": "Hot",
+      "description": "Equal parts espresso and warm textured milk for a balanced, intense drink.",
+      "price": 17000
+    },
+    {
+      "code": "0dwje7q",
+      "name": "Flat White",
+      "category": "Hot",
+      "description": "Double espresso with velvety microfoam for a rich, smooth finish.",
+      "price": 21000
+    },
+    {
+      "code": "0jma0ax",
+      "name": "Affogato",
+      "category": "Iced",
+      "description": "A scoop of creamy ice cream finished with a shot of hot espresso.",
+      "price": 18000
+    },
+    {
+      "code": "0lt1a96",
+      "name": "Iced Americano",
+      "category": "Iced",
+      "description": "Espresso and chilled water served over ice for a crisp finish.",
+      "price": 18000
+    },
+    {
+      "code": "1xkwwub",
+      "name": "Iced Latte",
+      "category": "Iced",
+      "description": "Espresso and chilled milk poured over ice for a smooth, refreshing cup.",
+      "price": 21000
+    },
+    {
+      "code": "1w7c35j",
+      "name": "Iced Mocha",
+      "category": "Iced",
+      "description": "Espresso, chocolate and chilled milk over ice.",
+      "price": 22000
+    },
+    {
+      "code": "1ov5kzn",
+      "name": "Spanish Iced Latte",
+      "category": "Iced",
+      "description": "Espresso, sweetened condensed milk and chilled milk over ice.",
+      "price": 23000
+    },
+    {
+      "code": "0olmhpa",
+      "name": "Cranberry Espresso",
+      "category": "Iced",
+      "description": "Bright cranberry and espresso combined for a fruity, refreshing profile.",
+      "price": 21000
+    },
+    {
+      "code": "1wbl96s",
+      "name": "Red Bull Espresso",
+      "category": "Iced",
+      "description": "A bold espresso twist with chilled Red Bull for an energetic finish.",
+      "price": 22000
+    },
+    {
+      "code": "0ah9kx5",
+      "name": "Espresso Tonic",
+      "category": "Iced",
+      "description": "Espresso over tonic water and ice for a bright, sparkling drink.",
+      "price": 20000
+    },
+    {
+      "code": "0gmui0k",
+      "name": "Espresso Ginger Ale",
+      "category": "Iced",
+      "description": "Espresso paired with sparkling ginger ale for a spicy, refreshing lift.",
+      "price": 20000
+    },
+    {
+      "code": "1ah8ltp",
+      "name": "Classic Frappe",
+      "category": "Frappe's",
+      "description": "Creamy blended coffee frappe with a smooth, refreshing finish.",
+      "price": 21000
+    },
+    {
+      "code": "0les0ej",
+      "name": "Mocha Frappe",
+      "category": "Frappe's",
+      "description": "Blended coffee and chocolate for a rich, indulgent frappe.",
+      "price": 25000
+    },
+    {
+      "code": "1xb1nr8",
+      "name": "Roasted Hazelnut Frappe",
+      "category": "Frappe's",
+      "description": "Creamy coffee frappe with warm roasted hazelnut notes.",
+      "price": 24000
+    },
+    {
+      "code": "0lxaqw2",
+      "name": "Irish Frappe",
+      "category": "Frappe's",
+      "description": "Smooth coffee frappe with a rich Irish-style flavor profile.",
+      "price": 24000
+    },
+    {
+      "code": "0ppb0xg",
+      "name": "Peanut Frappe",
+      "category": "Frappe's",
+      "description": "Creamy coffee frappe with roasted peanut richness.",
+      "price": 25000
+    },
+    {
+      "code": "0cxki52",
+      "name": "Nutella Frappe",
+      "category": "Frappe's",
+      "description": "Decadent coffee frappe blended with chocolate-hazelnut spread.",
+      "price": 27000
+    },
+    {
+      "code": "1gd7woo",
+      "name": "Lotus Biscoff Frappe",
+      "category": "Frappe's",
+      "description": "Creamy coffee frappe with caramelized biscuit flavor.",
+      "price": 27000
+    },
+    {
+      "code": "18mko51",
+      "name": "Green Tea",
+      "category": "Non-Coffee Based",
+      "description": "Light and refreshing brewed green tea with delicate vegetal notes.",
+      "price": 12000
+    },
+    {
+      "code": "12h1z7a",
+      "name": "Hibiscus Tea",
+      "category": "Non-Coffee Based",
+      "description": "Vibrant herbal infusion with a naturally tart, floral character.",
+      "price": 14000
+    },
+    {
+      "code": "0ze1j66",
+      "name": "Lemon Iced Tea",
+      "category": "Non-Coffee Based",
+      "description": "Refreshing chilled tea brightened with zesty lemon.",
+      "price": 20000
+    },
+    {
+      "code": "1hz76wk",
+      "name": "Peach Iced Tea",
+      "category": "Non-Coffee Based",
+      "description": "Chilled tea with sweet, juicy peach notes.",
+      "price": 21000
+    },
+    {
+      "code": "0tadjfn",
+      "name": "Lemon Mint Mojito",
+      "category": "Non-Coffee Based",
+      "description": "Refreshing lemon, mint and sparkling soda over ice.",
+      "price": 18000
+    },
+    {
+      "code": "1w9psai",
+      "name": "Blueberry Shake",
+      "category": "Non-Coffee Based",
+      "description": "Creamy milkshake with sweet blueberry flavor.",
+      "price": 22000
+    },
+    {
+      "code": "116bjkf",
+      "name": "Nutella Shake",
+      "category": "Non-Coffee Based",
+      "description": "Rich and creamy chocolate-hazelnut milkshake.",
+      "price": 24000
+    },
+    {
+      "code": "1dg4vpa",
+      "name": "Biscoff Shake",
+      "category": "Non-Coffee Based",
+      "description": "Smooth milkshake with caramelized Biscoff biscuit flavor.",
+      "price": 24000
+    },
+    {
+      "code": "0fde8lp",
+      "name": "Classic Hot Chocolate",
+      "category": "Non-Coffee Based",
+      "description": "Velvety hot chocolate with a rich cocoa finish.",
+      "price": 20000
+    },
+    {
+      "code": "0m6w2s9",
+      "name": "Straight Up",
+      "category": "Cold Brews",
+      "description": "Slow-steeped cold brew served chilled for a smooth, clean finish.",
+      "price": 18000
+    },
+    {
+      "code": "0suvxs5",
+      "name": "Tonic Cold Brew",
+      "category": "Cold Brews",
+      "description": "Smooth cold brew topped with crisp, sparkling tonic.",
+      "price": 20000
+    },
+    {
+      "code": "11bs3m4",
+      "name": "Ginger Ale Cold Brew",
+      "category": "Cold Brews",
+      "description": "Cold brew lifted with sparkling ginger ale and gentle spice.",
+      "price": 20000
+    },
+    {
+      "code": "1hun58d",
+      "name": "Sparkling Cold Brew",
+      "category": "Cold Brews",
+      "description": "Cold brew combined with sparkling water for a bright, refreshing cup.",
+      "price": 21000
+    },
+    {
+      "code": "0wvudw7",
+      "name": "Basil Cold Brew",
+      "category": "Cold Brews",
+      "description": "Cold brew infused with aromatic basil for a fresh, herbal finish.",
+      "price": 21000
+    },
+    {
+      "code": "0ttnnmp",
+      "name": "Purple Bloom Cold Brew",
+      "category": "Cold Brews",
+      "description": "Cold brew with a vibrant floral-fruity character and refreshing finish.",
+      "price": 19000
+    },
+    {
+      "code": "01eu95u",
+      "name": "Maltina Coldbrew",
+      "category": "TBC Specials",
+      "description": "Non-alcoholic based cold brew.",
+      "price": 24000
+    },
+    {
+      "code": "1scsxsf",
+      "name": "Purple Cloud",
+      "category": "TBC Specials",
+      "description": "Ube and banoffee based specialty drink.",
+      "price": 26000
+    },
+    {
+      "code": "12hnm84",
+      "name": "Jamun Fizz",
+      "category": "TBC Specials",
+      "description": "Fresh jamun mocktail.",
+      "price": 22000
+    },
+    {
+      "code": "0xd67iq",
+      "name": "TBC Sparkitup",
+      "category": "TBC Specials",
+      "description": "Sparkling water infused with tangy vanilla.",
+      "price": 24000
+    },
+    {
+      "code": "1lwm72b",
+      "name": "Banoffee Cheesecake Latte",
+      "category": "TBC Specials",
+      "description": "A rich banoffee cheesecake-inspired latte.",
+      "price": 25000
+    },
+    {
+      "code": "0rzesh4",
+      "name": "Dark Forestfoam",
+      "category": "TBC Specials",
+      "description": "Special dark chocolate based signature drink.",
+      "price": 25000
+    },
+    {
+      "code": "0y79ugi",
+      "name": "Lotus Cloud",
+      "category": "TBC Specials",
+      "description": "Biscoff iced latte.",
+      "price": 26000
+    },
+    {
+      "code": "0v8xaw8",
+      "name": "Coco Cream Ube",
+      "category": "TBC Specials",
+      "description": "Coconut water topped with ube.",
+      "price": 26000
+    },
+    {
+      "code": "16itnlp",
+      "name": "Aqua Fizz",
+      "category": "TBC Specials",
+      "description": "Red Bull with yuzu and an ocean-inspired profile.",
+      "price": 23000
+    }
+  ]
+}
