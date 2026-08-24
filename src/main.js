@@ -55,7 +55,31 @@ import { renderJoin } from './views/join.view.js';
 const shellHost = document.getElementById('shell');
 const bootScreen = document.getElementById('boot');
 
+/**
+ * Tell the watchdog in index.html that the modules did load. Without this it
+ * cannot tell "the app's files are missing" from "the app is slow", and those
+ * two need completely different advice.
+ */
+const bootStatus = (window.__tbcBoot = window.__tbcBoot || { started: false, ready: false });
+bootStatus.started = true;
+
+/**
+ * Give up on a promise after a while and carry on.
+ *
+ * Used for the one part of start-up that talks to a network. A till whose
+ * shared database has gone quiet must still open — it has a queue for the work
+ * it does meanwhile, and it catches up on the next round.
+ */
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 function fatal(message, detail) {
+  // A stated failure is an answer; the watchdog should stay quiet over it.
+  if (window.__tbcBoot) window.__tbcBoot.ready = true;
   if (!bootScreen) return;
   bootScreen.hidden = false;
   clear(bootScreen).appendChild(
@@ -123,8 +147,13 @@ async function boot() {
     // manager's laptop invents its own admin account and a second copy of the
     // menu — which is exactly the "my data is not here" problem.
     if (isCloudEnabled()) {
-      const result = await bootstrap();
+      // Bounded: an unreachable database delays the counter by seconds, never
+      // by minutes, and never indefinitely.
+      const result = await withTimeout(bootstrap(), 12000, { ok: false, mode: 'SLOW' });
       joinedExisting = Boolean(result.ok);
+      if (result.mode === 'SLOW') {
+        console.warn('[TBC POS] the cafe database did not answer in time; starting on local data');
+      }
     }
 
     const [menuResult, userResult] = await Promise.all([seedMenuIfEmpty(), seedUsersIfEmpty()]);
@@ -201,6 +230,7 @@ async function boot() {
 
     if (bootScreen) bootScreen.hidden = true;
     document.body.classList.add('is-ready');
+    bootStatus.ready = true;
 
     // Everything past this point is for staff. A customer's phone stops here.
     if (isCustomerRoute()) return;

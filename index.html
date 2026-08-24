@@ -85,6 +85,147 @@
       })();
     </script>
 
+    <!--
+      Watchdog.
+
+      "Opening the counter…" with nothing after it is the single most confusing
+      thing this app can do, and the two causes look identical to the person
+      staring at it: the app's files are not where index.html expects them, or
+      start-up is stuck on something. This is a classic (non-module) script, so
+      it runs even when every module has failed to load, and it turns that dead
+      screen into an answer.
+    -->
+    <script>
+      (function () {
+        var boot = (window.__tbcBoot = { started: false, ready: false });
+
+        function panel(title, lines, showReload) {
+          var host = document.getElementById('boot');
+          if (!host) return;
+
+          var html =
+            '<div style="max-width:38rem;margin:0 auto;padding:2.5rem 1.5rem;' +
+            'font:16px/1.65 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
+            'color:#241b16;text-align:left;">' +
+            '<h1 style="font-size:1.4rem;margin:0 0 1rem;">' + title + '</h1>';
+
+          for (var i = 0; i < lines.length; i++) {
+            html += '<p style="margin:0 0 0.85rem;">' + lines[i] + '</p>';
+          }
+          if (showReload) {
+            html +=
+              '<button onclick="window.location.reload()" style="margin-top:0.5rem;' +
+              'padding:0.7rem 1.2rem;font:inherit;font-weight:600;cursor:pointer;' +
+              'background:#6d2e5b;color:#fff;border:0;border-radius:8px;">Try again</button>';
+          }
+          html += '</div>';
+
+          host.hidden = false;
+          host.innerHTML = html;
+          host.style.background = '#fff';
+        }
+
+        function code(text) {
+          return (
+            '<code style="background:#efe7d9;padding:0.1em 0.4em;border-radius:4px;' +
+            'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.9em;">' + text + '</code>'
+          );
+        }
+
+        /* Which of the app's own files can actually be fetched from here. */
+        function checkFiles(done) {
+          var files = ['src/main.js', 'styles/app.css', 'assets/logo.jpg'];
+          var results = [];
+          var pending = files.length;
+
+          files.forEach(function (file) {
+            var url = new URL(file, document.baseURI).href;
+            var finish = function (ok, detail) {
+              results.push({ file: file, url: url, ok: ok, detail: detail });
+              if (--pending === 0) done(results);
+            };
+            try {
+              fetch(url, { method: 'GET', cache: 'no-store' })
+                .then(function (response) {
+                  finish(response.ok, response.status + ' ' + response.statusText);
+                })
+                .catch(function (error) {
+                  finish(false, String(error && error.message ? error.message : error));
+                });
+            } catch (error) {
+              finish(false, 'could not be requested');
+            }
+          });
+        }
+
+        // Long enough not to fire on a slow phone, short enough to beat giving up.
+        setTimeout(function () {
+          if (boot.started || boot.ready) return;
+
+          checkFiles(function (results) {
+            if (boot.started || boot.ready) return;
+
+            var missing = results.filter(function (row) {
+              return !row.ok;
+            });
+
+            if (missing.length) {
+              var list = missing
+                .map(function (row) {
+                  return '<li style="margin:0.2rem 0;">' + code(row.file) + ' — ' + row.detail + '</li>';
+                })
+                .join('');
+
+              panel(
+                'The app’s files are missing',
+                [
+                  'This page loaded, but the rest of the app did not come with it. ' +
+                    'The browser looked for these next to it and could not find them:',
+                  '<ul style="margin:0 0 1rem;padding-left:1.2rem;">' + list + '</ul>',
+                  '<strong>What usually causes this:</strong> only ' + code('index.html') +
+                    ' was uploaded, or the folder was uploaded with its contents one level ' +
+                    'deeper than the page.',
+                  '<strong>The fix:</strong> upload the <em>contents</em> of the app folder so ' +
+                    'that ' + code('index.html') + ', ' + code('src/') + ', ' + code('styles/') +
+                    ' and ' + code('assets/') + ' all sit side by side at the same level.',
+                  'Looking in: ' + code(document.baseURI),
+                ],
+                true
+              );
+              return;
+            }
+
+            // Files are all reachable, so the browser refused to run them.
+            panel(
+              'The app could not start',
+              [
+                'Every file is where it should be, but the browser did not run them.',
+                'This is usually an out-of-date browser that cannot load app modules. ' +
+                  'Try a current Chrome, Edge, Firefox or Safari.',
+                'Looking in: ' + code(document.baseURI),
+              ],
+              true
+            );
+          });
+        }, 6000);
+
+        // Started but never finished: something in start-up is stuck.
+        setTimeout(function () {
+          if (boot.ready || !boot.started) return;
+          panel(
+            'Still opening…',
+            [
+              'The app started but is taking much longer than it should.',
+              'If this cafe uses a shared database, it may be unreachable from here. ' +
+                'The counter still works on its own — reload and carry on, and it will ' +
+                'catch up when the connection returns.',
+            ],
+            true
+          );
+        }, 25000);
+      })();
+    </script>
+
     <script type="module" src="src/main.js"></script>
   </body>
 </html>

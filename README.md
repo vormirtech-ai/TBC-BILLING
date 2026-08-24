@@ -172,12 +172,41 @@ push to `main`.
 **Option B — no workflow.** Settings → Pages → Source → *Deploy from a branch*,
 pick `main` and the `/ (root)` folder.
 
+### Get the folder shape right
+
+This is the one thing worth checking twice, because getting it wrong produces a
+page that looks broken rather than one that says so. **`index.html` must sit at
+the top of what you publish, with the app's folders beside it:**
+
+```
+your-repo/
+  index.html          ← at the top, not inside another folder
+  src/
+  styles/
+  assets/
+  data/
+  manifest.webmanifest
+  .nojekyll
+```
+
+If you unzip the download you will get a `tbc-cafe-system/` folder — publish
+**what is inside it**, not the folder itself. Uploading the wrapper folder puts
+everything one level too deep, and the browser then finds `index.html` but none
+of the files it asks for.
+
+Do not lose **`.nojekyll`**: it is a hidden file, so some unzip tools and file
+pickers skip it, and without it GitHub runs Jekyll over the site.
+
+If the app ever opens to a bare **"Opening the counter…"** and stops there, it
+now checks itself after a few seconds and tells you exactly which files it could
+not find and where it was looking. That message is almost always this.
+
 Two details that are already handled for you:
 
 - **Base path.** Every asset is referenced relatively (`src/main.js`,
   `assets/logo.jpg`), and routing is hash-based, so the app works unchanged at
   `https://<user>.github.io/<repo>/` without any base-URL configuration.
-- **`.nojekyll`.** Present in the repository root so GitHub serves every file
+- **`.nojekyll`.** Included in the repository root so GitHub serves every file
   as-is instead of running Jekyll over it.
 
 ---
