@@ -309,6 +309,46 @@ export function renderMenuAdmin({ outlet }) {
     )
   );
 
+  /* ------------------------------------------------------ add from file --- */
+
+  /**
+   * Bring in menu items the app ships with that this cafe does not have yet —
+   * how the food menu reaches a till that has been running on drinks alone.
+   * Adds only what is missing; never touches a price somebody has edited.
+   */
+  async function addFromFile() {
+    const preview = menuRepo.previewMissingSeedItems();
+
+    if (!preview.count) {
+      toast.info('Every item in the menu file is already on your menu.');
+      return;
+    }
+
+    const ok = await confirmDialog({
+      title: `Add ${preview.count} item${preview.count === 1 ? '' : 's'} to the menu?`,
+      message:
+        'These are on the menu card the app ships with but not yet on yours. Nothing already on your menu is changed — prices you have edited stay exactly as they are.',
+      detail: preview.categories
+        .map((entry) => `${entry.category}: ${entry.count}`)
+        .join(' · '),
+      confirmLabel: 'Add them',
+    });
+    if (!ok) return;
+
+    try {
+      const result = await menuRepo.addMissingSeedItems();
+      toast.success(
+        `${result.added} item${result.added === 1 ? '' : 's'} added across ${
+          result.categories.length
+        } section${result.categories.length === 1 ? '' : 's'}.`
+      );
+      paint();
+      toast.info('Publish the menu so QR ordering shows the new items.');
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
   /* ---------------------------------------------------------- publish --- */
 
   /**
@@ -394,6 +434,12 @@ export function renderMenuAdmin({ outlet }) {
     el('div.page__head', {}, [
       el('div', {}, [el('h1.page__title', { text: 'Menu' }), countNote]),
       el('div.page__actions', {}, [
+        el('button.btn.btn--ghost', {
+          type: 'button',
+          text: 'Add items from the menu file',
+          title: 'Bring across anything in the app’s menu file that is not on the menu yet',
+          onclick: addFromFile,
+        }),
         el('button.btn.btn--ghost', {
           type: 'button',
           text: 'Publish for QR ordering',

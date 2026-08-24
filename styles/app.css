@@ -759,6 +759,14 @@ body.is-login {
   padding-left: 14px;
 }
 
+/* With food on the menu there are far more sections than fit the width. The
+   row scrolls, and this fade is what says so — a hard clip just looks like the
+   list ends there. */
+.chips {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent 100%);
+}
+
 .chips {
   display: flex;
   gap: 7px;

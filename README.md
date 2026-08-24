@@ -43,8 +43,9 @@ app tells you so in the top bar.
 
 **For the cashier**
 
-- Tap-to-add menu grid, 48 items across six categories, with instant search
-  (`/` focuses the search box, `Enter` adds the first match).
+- Tap-to-add menu grid: 142 items — the full drinks and food cards — across 21
+  sections, with instant search (`/` focuses the search box, `Enter` adds the
+  first match). On a menu this size, searching beats scrolling.
 - Tapping the same drink again bumps the quantity instead of adding a second row.
 - Live subtotal, tax, discount and total, all recalculated as items change.
 - Payment in Cash, UPI or Card. Cash shows quick-tender buttons and calculates
@@ -214,23 +215,42 @@ card data or anything you would be legally liable for losing.
 
 ## The menu
 
-All 48 items — names, prices and descriptions — come from the cafe's printed menu
-and live in [`src/data/menu.seed.js`](src/data/menu.seed.js).
+All 142 items — names, prices and descriptions — are transcribed from the cafe's
+own printed cards and live in
+[`src/data/menu.seed.js`](src/data/menu.seed.js). Spellings are the cafe's own,
+because that is what is on the table and what staff say out loud.
 
-| Category | Items |
-| --- | --- |
-| Hot | 8 |
-| Iced | 9 |
-| Frappe's | 7 |
-| Non-Coffee Based | 9 |
-| Cold Brews | 6 |
-| TBC Specials | 9 |
+| Drinks | Items | | Food | Items |
+| --- | --- | --- | --- | --- |
+| Hot | 8 | | Pizza (Veg) | 7 |
+| Iced | 9 | | Pizza (Non-Veg) | 7 |
+| Frappe's | 7 | | Pasta (Veg) | 7 |
+| Non-Coffee Based | 9 | | Pasta (Non-Veg) | 7 |
+| Cold Brews | 6 | | Sandwich (Veg) | 8 |
+| TBC Specials | 9 | | Sandwich (Non-Veg) | 7 |
+| | | | Burger (Veg) | 6 |
+| | | | Burger (Non-Veg) | 5 |
+| | | | Chinese (Veg) | 6 |
+| | | | Chinese (Non-Veg) | 6 |
+| | | | Rice Bowl (Veg) | 8 |
+| | | | Rice Bowl (Non-Veg) | 8 |
+| | | | Fries | 4 |
+| | | | Salad | 3 |
+| | | | Dessert | 5 |
 
-The seed file is only read the first time the app opens on a device. After that,
-the live menu lives in the browser database and is edited from **Menu** in the
-app. Editing the seed file will not change a device that has already been used —
-to force it, use **Settings → Reset menu to the menu file** (this discards menu
-edits; it does not touch past bills).
+**Veg and non-veg are separate sections**, as they are on the printed card. It
+is the first thing most customers filter on, and it keeps names that appear in
+both — "Pizza Sandwich", "Thai Curry" — from colliding. Pasta is listed twice
+for the same reason: the card prices it at ₹249 veg and ₹349 with chicken.
+
+The seed file is only read the first time the app opens on a device. After that
+the live menu lives in the database and is edited from **Menu** in the app.
+
+**When new items are added to the seed file later** — a new menu card, say —
+**Menu → Add items from the menu file** brings across only what is missing and
+leaves every existing item and price untouched. That is the one to use on a till
+that has been trading. **Settings → Reset menu to the menu file** is the blunt
+alternative: it discards menu edits (it never touches past bills).
 
 **Price changes never rewrite history.** When an item is added to an order, its
 price, name, category and tax rate are copied onto the order line. Raising the
@@ -609,7 +629,7 @@ data/menu.published.json    the menu customers see when they scan a table code
 src/
   main.js                   boot, routes, role guard
   config/app.config.js      credentials, defaults, payment methods  ← edit me
-  data/menu.seed.js         the printed menu, 48 items              ← edit me
+  data/menu.seed.js         the printed menu, 142 items             ← edit me
   core/
     money.js                integer-paise maths and formatting
     quantity.js             integer-thousandths maths for stock
@@ -695,34 +715,36 @@ Worth walking through after any change:
 10. **Refresh mid-order** — an unpaid order is still at the counter afterwards.
 11. **Backup** — export, restore on a second browser profile, confirm bill count.
 12. **Print** — the bill preview prints without the surrounding app chrome.
-13. **Tables** — add several at once; each card shows a QR code; **Print all QR
+13. **The menu** — search finds food as well as drinks (`/` then "brownie"), and
+    the section chips scroll to reach the food sections.
+14. **Tables** — add several at once; each card shows a QR code; **Print all QR
     cards** produces a sheet with nothing but the cards on it.
-14. **Scan a table code with a real phone** — the menu opens and names the right
+15. **Scan a table code with a real phone** — the menu opens and names the right
     table.
-15. **QR order** — send one from the phone, then take it in at the counter with
+16. **QR order** — send one from the phone, then take it in at the counter with
     **Scan a customer's code**. The till should show the right items at *your*
     prices, seated at the right table.
-16. **Stock** — give an item a recipe, sell it, and check the shelf went down by
+17. **Stock** — give an item a recipe, sell it, and check the shelf went down by
     the right amount. Void the bill and check it came back.
-17. **Low stock** — set a reorder level above the current level and confirm the
+18. **Low stock** — set a reorder level above the current level and confirm the
     count appears on the Stock tab.
-18. **Rota** — add a shift, edit it, copy a day onto another day.
-19. **Attendance** — clock someone in and out, then correct the times and check
+19. **Rota** — add a shift, edit it, copy a day onto another day.
+20. **Attendance** — clock someone in and out, then correct the times and check
     the hours follow.
 
 With the cafe database connected:
 
-20. **Two devices** — connect the counter, pair a second device with the code,
+21. **Two devices** — connect the counter, pair a second device with the code,
     and check the top bar reads **Shared** on both.
-21. **A bill crosses over** — ring one up on the counter; it should appear in
+22. **A bill crosses over** — ring one up on the counter; it should appear in
     Bills on the other device within a few seconds.
-22. **One login everywhere** — change the admin password on one device and sign
+23. **One login everywhere** — change the admin password on one device and sign
     in with it on the other.
-23. **Bill numbers** — bill from both devices and confirm the numbers do not
+24. **Bill numbers** — bill from both devices and confirm the numbers do not
     collide.
-24. **A QR order arrives by itself** — order from a phone and watch the counter's
+25. **A QR order arrives by itself** — order from a phone and watch the counter's
     Orders button turn red without anybody scanning anything.
-25. **Pull the network out** — take a bill with wi-fi off (it should still go
+26. **Pull the network out** — take a bill with wi-fi off (it should still go
     through, numbered like `ORD-000042-K7`), then reconnect and confirm it
     reaches the other device.
 

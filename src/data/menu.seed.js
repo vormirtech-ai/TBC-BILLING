@@ -2,22 +2,47 @@
  * ---------------------------------------------------------------------------
  * THE BARUCH CAFE — MENU
  * ---------------------------------------------------------------------------
- * Transcribed exactly from "Baruch Cafe Menu Final Rates". Names, spellings and
- * prices are as printed on the menu card. Prices are in whole rupees here and
- * are converted to paise (integers) when the database is seeded.
+ * Transcribed from the cafe's own printed cards: the drinks from "Baruch Cafe
+ * Menu Final Rates", the food from the TBC Food Menu. Names, spellings and
+ * prices are exactly as printed — including the cafe's own spellings, which are
+ * what customers see on the table and what staff say out loud. Prices are in
+ * whole rupees here and are converted to paise (integers) when seeded.
+ *
+ * Veg and non-veg are kept in separate categories rather than mixed together.
+ * That is how the printed menu reads, it is the first thing most customers here
+ * filter on, and it keeps names like "Pizza Sandwich" — which exists in both —
+ * from colliding.
  *
  * To change the menu after launch, use Admin → Menu inside the app — editing
  * this file only affects a device that has never been opened before.
- * To re-seed a device from this file: Admin → Settings → Reset menu to file.
+ * To pick up items added to this file later without losing your own price
+ * edits: Admin → Menu → Add new items from the menu file.
  */
 
 export const MENU_CATEGORIES = [
+  /* drinks */
   'Hot',
   'Iced',
   "Frappe's",
   'Non-Coffee Based',
   'Cold Brews',
   'TBC Specials',
+  /* food */
+  'Pizza (Veg)',
+  'Pizza (Non-Veg)',
+  'Pasta (Veg)',
+  'Pasta (Non-Veg)',
+  'Sandwich (Veg)',
+  'Sandwich (Non-Veg)',
+  'Burger (Veg)',
+  'Burger (Non-Veg)',
+  'Chinese (Veg)',
+  'Chinese (Non-Veg)',
+  'Rice Bowl (Veg)',
+  'Rice Bowl (Non-Veg)',
+  'Fries',
+  'Salad',
+  'Dessert',
 ];
 
 export const MENU_SEED = [
@@ -80,4 +105,135 @@ export const MENU_SEED = [
   { name: 'Lotus Cloud', category: 'TBC Specials', price: 260, description: 'Biscoff iced latte.' },
   { name: 'Coco Cream Ube', category: 'TBC Specials', price: 260, description: 'Coconut water topped with ube.' },
   { name: 'Aqua Fizz', category: 'TBC Specials', price: 230, description: 'Red Bull with yuzu and an ocean-inspired profile.' },
+
+  /* =======================================================================
+     FOOD
+     From the TBC Food Menu card. Descriptions are only those printed on it;
+     nothing here is invented, because a description a customer reads should
+     be the kitchen's promise rather than a guess.
+     ======================================================================= */
+
+  // --------------------------------------------------------- Pizza (Veg)
+  { name: 'Margerita Classic', category: 'Pizza (Veg)', price: 119, description: 'Tomato, basil, black olive.' },
+  { name: 'Pesto Basil', category: 'Pizza (Veg)', price: 289, description: 'Feta cheez and exotic vegies.' },
+  { name: 'Verdure', category: 'Pizza (Veg)', price: 289, description: 'Italian vegitable pizza.' },
+  { name: 'Chezwan Paneer', category: 'Pizza (Veg)', price: 299, description: 'Paneer, bell paper, vegies.' },
+  { name: 'BBQ Pizza', category: 'Pizza (Veg)', price: 319, description: 'BBQ sauces, vegies, cheez.' },
+  { name: 'Pesto Paneer Pizza', category: 'Pizza (Veg)', price: 389, description: '' },
+  { name: 'Corn Cheese Pizza', category: 'Pizza (Veg)', price: 199, description: '' },
+
+  // ----------------------------------------------------- Pizza (Non-Veg)
+  { name: 'Chezwan Chicken', category: 'Pizza (Non-Veg)', price: 350, description: '' },
+  { name: 'BBQ Chicken', category: 'Pizza (Non-Veg)', price: 350, description: '' },
+  { name: 'Meat Feast', category: 'Pizza (Non-Veg)', price: 369, description: '' },
+  { name: 'Simply Chicken', category: 'Pizza (Non-Veg)', price: 349, description: '' },
+  { name: 'Pesto Chicken', category: 'Pizza (Non-Veg)', price: 389, description: '' },
+  { name: 'Peri-Peri Chicken', category: 'Pizza (Non-Veg)', price: 379, description: '' },
+  { name: 'Calzone', category: 'Pizza (Non-Veg)', price: 389, description: 'TBC Special.' },
+
+  // --------------------------------------------------------- Pasta (Veg)
+  { name: 'Alfredo Pasta', category: 'Pasta (Veg)', price: 249, description: 'Penne or spaghetti.' },
+  { name: 'Arabita Pasta', category: 'Pasta (Veg)', price: 249, description: '' },
+  { name: 'Penne Pada Pesto', category: 'Pasta (Veg)', price: 249, description: '' },
+  { name: 'Pink Sauce', category: 'Pasta (Veg)', price: 249, description: '' },
+  { name: 'Som Pesto Rigatoni', category: 'Pasta (Veg)', price: 249, description: '' },
+  { name: 'Agleo Olio Pasta', category: 'Pasta (Veg)', price: 249, description: '' },
+  { name: 'Mac & Cheese Pasta', category: 'Pasta (Veg)', price: 249, description: '' },
+
+  // ----------------------------------------------------- Pasta (Non-Veg)
+  { name: 'Alfredo Pasta', category: 'Pasta (Non-Veg)', price: 349, description: 'Penne or spaghetti, with chicken.' },
+  { name: 'Arabita Pasta', category: 'Pasta (Non-Veg)', price: 349, description: 'With chicken.' },
+  { name: 'Penne Pada Pesto', category: 'Pasta (Non-Veg)', price: 349, description: 'With chicken.' },
+  { name: 'Pink Sauce', category: 'Pasta (Non-Veg)', price: 349, description: 'With chicken.' },
+  { name: 'Som Pesto Rigatoni', category: 'Pasta (Non-Veg)', price: 349, description: 'With chicken.' },
+  { name: 'Agleo Olio Pasta', category: 'Pasta (Non-Veg)', price: 349, description: 'With chicken.' },
+  { name: 'Mac & Cheese Pasta', category: 'Pasta (Non-Veg)', price: 349, description: 'With chicken.' },
+
+  // ------------------------------------------------------ Sandwich (Veg)
+  { name: 'Tandoori Paneer', category: 'Sandwich (Veg)', price: 199, description: '' },
+  { name: 'Corn Cheese', category: 'Sandwich (Veg)', price: 189, description: '' },
+  { name: 'Double Cheese', category: 'Sandwich (Veg)', price: 220, description: '' },
+  { name: 'Pesto Paneer', category: 'Sandwich (Veg)', price: 230, description: '' },
+  { name: 'BBQ Paneer', category: 'Sandwich (Veg)', price: 240, description: '' },
+  { name: 'Bombay Grilled', category: 'Sandwich (Veg)', price: 249, description: '' },
+  { name: 'Melting Paneer', category: 'Sandwich (Veg)', price: 249, description: '' },
+  { name: 'Pizza Sandwich', category: 'Sandwich (Veg)', price: 249, description: '' },
+
+  // -------------------------------------------------- Sandwich (Non-Veg)
+  { name: 'Tandoori Chicken', category: 'Sandwich (Non-Veg)', price: 289, description: '' },
+  { name: 'Double Cheese Chicken', category: 'Sandwich (Non-Veg)', price: 269, description: '' },
+  { name: 'Pesto Chicken', category: 'Sandwich (Non-Veg)', price: 249, description: '' },
+  { name: 'BBQ Chicken', category: 'Sandwich (Non-Veg)', price: 299, description: '' },
+  { name: 'Panini Chicken', category: 'Sandwich (Non-Veg)', price: 349, description: '' },
+  { name: 'Melting Chicken', category: 'Sandwich (Non-Veg)', price: 299, description: '' },
+  { name: 'Pizza Sandwich', category: 'Sandwich (Non-Veg)', price: 349, description: '' },
+
+  // -------------------------------------------------------- Burger (Veg)
+  { name: 'Veg Cheese Melt', category: 'Burger (Veg)', price: 149, description: '' },
+  { name: 'Aalo Tikki Burger', category: 'Burger (Veg)', price: 149, description: '' },
+  { name: 'Veg Paprika', category: 'Burger (Veg)', price: 149, description: '' },
+  { name: 'Shezwan Maharaja', category: 'Burger (Veg)', price: 179, description: '' },
+  { name: 'Paneer Tikka Burger', category: 'Burger (Veg)', price: 199, description: '' },
+  { name: 'OG Veg Burger', category: 'Burger (Veg)', price: 199, description: '' },
+
+  // ---------------------------------------------------- Burger (Non-Veg)
+  { name: 'Crunchy Chicken', category: 'Burger (Non-Veg)', price: 199, description: '' },
+  { name: 'OG Chicken', category: 'Burger (Non-Veg)', price: 219, description: '' },
+  { name: 'Chicken Gun Powder', category: 'Burger (Non-Veg)', price: 229, description: '' },
+  { name: 'Chicken Tikka', category: 'Burger (Non-Veg)', price: 299, description: '' },
+  { name: 'Korean Chicken', category: 'Burger (Non-Veg)', price: 299, description: '' },
+
+  // ------------------------------------------------------- Chinese (Veg)
+  { name: 'Black Pepper Paneer', category: 'Chinese (Veg)', price: 249, description: '' },
+  { name: 'Honey Chilly Paneer', category: 'Chinese (Veg)', price: 249, description: '' },
+  { name: 'Paneer Curry', category: 'Chinese (Veg)', price: 249, description: '' },
+  { name: 'Paneer 65', category: 'Chinese (Veg)', price: 249, description: '' },
+  { name: 'Paneer Hot Balls', category: 'Chinese (Veg)', price: 249, description: '' },
+  { name: 'Chilly Paneer', category: 'Chinese (Veg)', price: 249, description: '' },
+
+  // --------------------------------------------------- Chinese (Non-Veg)
+  { name: 'Black Pepper Chicken', category: 'Chinese (Non-Veg)', price: 249, description: '' },
+  { name: 'Honey Chilly Chicken', category: 'Chinese (Non-Veg)', price: 249, description: '' },
+  { name: 'Chicken Curry', category: 'Chinese (Non-Veg)', price: 249, description: '' },
+  { name: 'Chicken 65', category: 'Chinese (Non-Veg)', price: 249, description: '' },
+  { name: 'Chicken Hot Balls', category: 'Chinese (Non-Veg)', price: 249, description: '' },
+  { name: 'Chilly Chicken', category: 'Chinese (Non-Veg)', price: 249, description: '' },
+
+  // ----------------------------------------------------- Rice Bowl (Veg)
+  { name: 'Thai Curry', category: 'Rice Bowl (Veg)', price: 349, description: '' },
+  { name: 'Cilantro Lime Paneer', category: 'Rice Bowl (Veg)', price: 349, description: '' },
+  { name: 'Paneer Stroganoff', category: 'Rice Bowl (Veg)', price: 299, description: '' },
+  { name: 'Pesto Paneer', category: 'Rice Bowl (Veg)', price: 299, description: '' },
+  { name: 'Paprika Paneer', category: 'Rice Bowl (Veg)', price: 319, description: '' },
+  { name: 'Tuscan Paneer', category: 'Rice Bowl (Veg)', price: 349, description: '' },
+  { name: 'Crypto Veggie Meal', category: 'Rice Bowl (Veg)', price: 349, description: '' },
+  { name: 'China Bowl', category: 'Rice Bowl (Veg)', price: 349, description: '' },
+
+  // ------------------------------------------------- Rice Bowl (Non-Veg)
+  { name: 'Thai Curry', category: 'Rice Bowl (Non-Veg)', price: 349, description: '' },
+  { name: 'Cilantro Lime Chicken', category: 'Rice Bowl (Non-Veg)', price: 349, description: '' },
+  { name: 'Chicken Stroganoff', category: 'Rice Bowl (Non-Veg)', price: 299, description: '' },
+  { name: 'Pesto Chicken', category: 'Rice Bowl (Non-Veg)', price: 299, description: '' },
+  { name: 'Paprika Chicken', category: 'Rice Bowl (Non-Veg)', price: 319, description: '' },
+  { name: 'Tuscan Chicken', category: 'Rice Bowl (Non-Veg)', price: 349, description: '' },
+  { name: 'Crypto Egg Meal', category: 'Rice Bowl (Non-Veg)', price: 349, description: '' },
+  { name: 'China Bowl', category: 'Rice Bowl (Non-Veg)', price: 349, description: '' },
+
+  // --------------------------------------------------------------- Fries
+  { name: 'Salted Fries', category: 'Fries', price: 149, description: '' },
+  { name: 'Peri Peri Fries', category: 'Fries', price: 199, description: '' },
+  { name: 'Loaded Cheez Fries', category: 'Fries', price: 289, description: '' },
+  { name: 'Mexican Loaded Fries', category: 'Fries', price: 249, description: '' },
+
+  // --------------------------------------------------------------- Salad
+  { name: 'Greek Salad', category: 'Salad', price: 250, description: 'Veg or non-veg.' },
+  { name: 'Italian Salad', category: 'Salad', price: 250, description: 'Veg or non-veg.' },
+  { name: 'Sizer Salad', category: 'Salad', price: 250, description: 'Veg or non-veg.' },
+
+  // ------------------------------------------------------------- Dessert
+  { name: 'Sizzling Brownie', category: 'Dessert', price: 220, description: '' },
+  { name: 'Walnut Brownie', category: 'Dessert', price: 150, description: '' },
+  { name: 'Pan Cakes', category: 'Dessert', price: 199, description: '' },
+  { name: 'Waffle', category: 'Dessert', price: 199, description: '' },
+  { name: 'French Toast', category: 'Dessert', price: 199, description: '' },
 ];

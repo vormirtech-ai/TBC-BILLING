@@ -1,7 +1,7 @@
 {
   "format": "tbc-published-menu",
   "formatVersion": 1,
-  "publishedAt": "2026-08-23T20:02:32.781Z",
+  "publishedAt": "2026-08-24T08:25:43.006Z",
   "cafeName": "The Baruch Cafe",
   "tagline": "Coffee • Eats • Community",
   "currencySymbol": "₹",
@@ -344,6 +344,664 @@
       "category": "TBC Specials",
       "description": "Red Bull with yuzu and an ocean-inspired profile.",
       "price": 23000
+    },
+    {
+      "code": "1gedpsi",
+      "name": "Margerita Classic",
+      "category": "Pizza (Veg)",
+      "description": "Tomato, basil, black olive.",
+      "price": 11900
+    },
+    {
+      "code": "0f175ay",
+      "name": "Pesto Basil",
+      "category": "Pizza (Veg)",
+      "description": "Feta cheez and exotic vegies.",
+      "price": 28900
+    },
+    {
+      "code": "1o82sbn",
+      "name": "Verdure",
+      "category": "Pizza (Veg)",
+      "description": "Italian vegitable pizza.",
+      "price": 28900
+    },
+    {
+      "code": "1ci4w53",
+      "name": "Chezwan Paneer",
+      "category": "Pizza (Veg)",
+      "description": "Paneer, bell paper, vegies.",
+      "price": 29900
+    },
+    {
+      "code": "13imk41",
+      "name": "BBQ Pizza",
+      "category": "Pizza (Veg)",
+      "description": "BBQ sauces, vegies, cheez.",
+      "price": 31900
+    },
+    {
+      "code": "07bxnyc",
+      "name": "Pesto Paneer Pizza",
+      "category": "Pizza (Veg)",
+      "description": "",
+      "price": 38900
+    },
+    {
+      "code": "0ect01p",
+      "name": "Corn Cheese Pizza",
+      "category": "Pizza (Veg)",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "1a08s9r",
+      "name": "Chezwan Chicken",
+      "category": "Pizza (Non-Veg)",
+      "description": "",
+      "price": 35000
+    },
+    {
+      "code": "1xfc33y",
+      "name": "BBQ Chicken",
+      "category": "Pizza (Non-Veg)",
+      "description": "",
+      "price": 35000
+    },
+    {
+      "code": "1oq1rd6",
+      "name": "Meat Feast",
+      "category": "Pizza (Non-Veg)",
+      "description": "",
+      "price": 36900
+    },
+    {
+      "code": "1da6dmv",
+      "name": "Simply Chicken",
+      "category": "Pizza (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "07ypyb8",
+      "name": "Pesto Chicken",
+      "category": "Pizza (Non-Veg)",
+      "description": "",
+      "price": 38900
+    },
+    {
+      "code": "03i4qyu",
+      "name": "Peri-Peri Chicken",
+      "category": "Pizza (Non-Veg)",
+      "description": "",
+      "price": 37900
+    },
+    {
+      "code": "1q1lx1w",
+      "name": "Calzone",
+      "category": "Pizza (Non-Veg)",
+      "description": "TBC Special.",
+      "price": 38900
+    },
+    {
+      "code": "03xqhv7",
+      "name": "Alfredo Pasta",
+      "category": "Pasta (Veg)",
+      "description": "Penne or spaghetti.",
+      "price": 24900
+    },
+    {
+      "code": "0o2zs1a",
+      "name": "Arabita Pasta",
+      "category": "Pasta (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1op0vq8",
+      "name": "Penne Pada Pesto",
+      "category": "Pasta (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1sg10fs",
+      "name": "Pink Sauce",
+      "category": "Pasta (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0tio8ju",
+      "name": "Som Pesto Rigatoni",
+      "category": "Pasta (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "10b5r4z",
+      "name": "Agleo Olio Pasta",
+      "category": "Pasta (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "09ts9fi",
+      "name": "Mac & Cheese Pasta",
+      "category": "Pasta (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "102sobx",
+      "name": "Alfredo Pasta",
+      "category": "Pasta (Non-Veg)",
+      "description": "Penne or spaghetti, with chicken.",
+      "price": 34900
+    },
+    {
+      "code": "1lliass",
+      "name": "Arabita Pasta",
+      "category": "Pasta (Non-Veg)",
+      "description": "With chicken.",
+      "price": 34900
+    },
+    {
+      "code": "1b3jfx2",
+      "name": "Penne Pada Pesto",
+      "category": "Pasta (Non-Veg)",
+      "description": "With chicken.",
+      "price": 34900
+    },
+    {
+      "code": "1dj28x2",
+      "name": "Pink Sauce",
+      "category": "Pasta (Non-Veg)",
+      "description": "With chicken.",
+      "price": 34900
+    },
+    {
+      "code": "15l4xi8",
+      "name": "Som Pesto Rigatoni",
+      "category": "Pasta (Non-Veg)",
+      "description": "With chicken.",
+      "price": 34900
+    },
+    {
+      "code": "1n6v51p",
+      "name": "Agleo Olio Pasta",
+      "category": "Pasta (Non-Veg)",
+      "description": "With chicken.",
+      "price": 34900
+    },
+    {
+      "code": "1g5zhrc",
+      "name": "Mac & Cheese Pasta",
+      "category": "Pasta (Non-Veg)",
+      "description": "With chicken.",
+      "price": 34900
+    },
+    {
+      "code": "0e1yvka",
+      "name": "Tandoori Paneer",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "0yotgre",
+      "name": "Corn Cheese",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 18900
+    },
+    {
+      "code": "1gzewp7",
+      "name": "Double Cheese",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 22000
+    },
+    {
+      "code": "07q562h",
+      "name": "Pesto Paneer",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 23000
+    },
+    {
+      "code": "00ldtyv",
+      "name": "BBQ Paneer",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 24000
+    },
+    {
+      "code": "1ojych4",
+      "name": "Bombay Grilled",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "14ydkd4",
+      "name": "Melting Paneer",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1lzengw",
+      "name": "Pizza Sandwich",
+      "category": "Sandwich (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0sv5lgw",
+      "name": "Tandoori Chicken",
+      "category": "Sandwich (Non-Veg)",
+      "description": "",
+      "price": 28900
+    },
+    {
+      "code": "04nth16",
+      "name": "Double Cheese Chicken",
+      "category": "Sandwich (Non-Veg)",
+      "description": "",
+      "price": 26900
+    },
+    {
+      "code": "0jkcp9t",
+      "name": "Pesto Chicken",
+      "category": "Sandwich (Non-Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1i0x8uj",
+      "name": "BBQ Chicken",
+      "category": "Sandwich (Non-Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "1hgsssd",
+      "name": "Panini Chicken",
+      "category": "Sandwich (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "0aqrubq",
+      "name": "Melting Chicken",
+      "category": "Sandwich (Non-Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "0c7izmm",
+      "name": "Pizza Sandwich",
+      "category": "Sandwich (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "0ost74q",
+      "name": "Veg Cheese Melt",
+      "category": "Burger (Veg)",
+      "description": "",
+      "price": 14900
+    },
+    {
+      "code": "0bt8y11",
+      "name": "Aalo Tikki Burger",
+      "category": "Burger (Veg)",
+      "description": "",
+      "price": 14900
+    },
+    {
+      "code": "1mnsb4r",
+      "name": "Veg Paprika",
+      "category": "Burger (Veg)",
+      "description": "",
+      "price": 14900
+    },
+    {
+      "code": "1gtj790",
+      "name": "Shezwan Maharaja",
+      "category": "Burger (Veg)",
+      "description": "",
+      "price": 17900
+    },
+    {
+      "code": "1g1pfo3",
+      "name": "Paneer Tikka Burger",
+      "category": "Burger (Veg)",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "1riwuhg",
+      "name": "OG Veg Burger",
+      "category": "Burger (Veg)",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "0f0hcgs",
+      "name": "Crunchy Chicken",
+      "category": "Burger (Non-Veg)",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "10npuqk",
+      "name": "OG Chicken",
+      "category": "Burger (Non-Veg)",
+      "description": "",
+      "price": 21900
+    },
+    {
+      "code": "1k8382r",
+      "name": "Chicken Gun Powder",
+      "category": "Burger (Non-Veg)",
+      "description": "",
+      "price": 22900
+    },
+    {
+      "code": "17vd6ws",
+      "name": "Chicken Tikka",
+      "category": "Burger (Non-Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "06nqm6y",
+      "name": "Korean Chicken",
+      "category": "Burger (Non-Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "05dmpiz",
+      "name": "Black Pepper Paneer",
+      "category": "Chinese (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1o2aj24",
+      "name": "Honey Chilly Paneer",
+      "category": "Chinese (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0beekyl",
+      "name": "Paneer Curry",
+      "category": "Chinese (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0asx66j",
+      "name": "Paneer 65",
+      "category": "Chinese (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0ytpk0j",
+      "name": "Paneer Hot Balls",
+      "category": "Chinese (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1fav2nn",
+      "name": "Chilly Paneer",
+      "category": "Chinese (Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0stg017",
+      "name": "Black Pepper Chicken",
+      "category": "Chinese (Non-Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "19lc9wy",
+      "name": "Honey Chilly Chicken",
+      "category": "Chinese (Non-Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0530odv",
+      "name": "Chicken Curry",
+      "category": "Chinese (Non-Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "19k0un1",
+      "name": "Chicken 65",
+      "category": "Chinese (Non-Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1b0vhx5",
+      "name": "Chicken Hot Balls",
+      "category": "Chinese (Non-Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "0e228n3",
+      "name": "Chilly Chicken",
+      "category": "Chinese (Non-Veg)",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1tbdzky",
+      "name": "Thai Curry",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "1wwgebz",
+      "name": "Cilantro Lime Paneer",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "0ehuw0l",
+      "name": "Paneer Stroganoff",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "1cjsr79",
+      "name": "Pesto Paneer",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "0d9ru2e",
+      "name": "Paprika Paneer",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 31900
+    },
+    {
+      "code": "0tqjs5q",
+      "name": "Tuscan Paneer",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "0xvpy9a",
+      "name": "Crypto Veggie Meal",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "0tudtqa",
+      "name": "China Bowl",
+      "category": "Rice Bowl (Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "19wwsec",
+      "name": "Thai Curry",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "19a9csr",
+      "name": "Cilantro Lime Chicken",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "1e4xsob",
+      "name": "Chicken Stroganoff",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "1n6l5nh",
+      "name": "Pesto Chicken",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 29900
+    },
+    {
+      "code": "1wb975c",
+      "name": "Paprika Chicken",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 31900
+    },
+    {
+      "code": "1r2a4zs",
+      "name": "Tuscan Chicken",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "10zh41s",
+      "name": "Crypto Egg Meal",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "023njkc",
+      "name": "China Bowl",
+      "category": "Rice Bowl (Non-Veg)",
+      "description": "",
+      "price": 34900
+    },
+    {
+      "code": "1dc3rgi",
+      "name": "Salted Fries",
+      "category": "Fries",
+      "description": "",
+      "price": 14900
+    },
+    {
+      "code": "1kbu20n",
+      "name": "Peri Peri Fries",
+      "category": "Fries",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "04vchmz",
+      "name": "Loaded Cheez Fries",
+      "category": "Fries",
+      "description": "",
+      "price": 28900
+    },
+    {
+      "code": "098agnt",
+      "name": "Mexican Loaded Fries",
+      "category": "Fries",
+      "description": "",
+      "price": 24900
+    },
+    {
+      "code": "1y5mp8b",
+      "name": "Greek Salad",
+      "category": "Salad",
+      "description": "Veg or non-veg.",
+      "price": 25000
+    },
+    {
+      "code": "07b5m5b",
+      "name": "Italian Salad",
+      "category": "Salad",
+      "description": "Veg or non-veg.",
+      "price": 25000
+    },
+    {
+      "code": "1s2xmm6",
+      "name": "Sizer Salad",
+      "category": "Salad",
+      "description": "Veg or non-veg.",
+      "price": 25000
+    },
+    {
+      "code": "1p3jb3h",
+      "name": "Sizzling Brownie",
+      "category": "Dessert",
+      "description": "",
+      "price": 22000
+    },
+    {
+      "code": "05nayye",
+      "name": "Walnut Brownie",
+      "category": "Dessert",
+      "description": "",
+      "price": 15000
+    },
+    {
+      "code": "1tt402v",
+      "name": "Pan Cakes",
+      "category": "Dessert",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "0vboyiw",
+      "name": "Waffle",
+      "category": "Dessert",
+      "description": "",
+      "price": 19900
+    },
+    {
+      "code": "19ugb4o",
+      "name": "French Toast",
+      "category": "Dessert",
+      "description": "",
+      "price": 19900
     }
   ]
 }

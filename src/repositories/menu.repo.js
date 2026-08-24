@@ -239,6 +239,58 @@ export async function seedMenuIfEmpty() {
   return { seeded: true, count: items.length };
 }
 
+/**
+ * Add items that are in the menu file but not yet on this device, and touch
+ * nothing else.
+ *
+ * The destructive reset below is no use to a cafe that has been trading: it
+ * would take their price edits with it. When a new menu card is added to the
+ * file — the food menu, say — this brings just the new items across and leaves
+ * every existing item, price and availability exactly as it is.
+ *
+ * Matching is by the item's stable code, so an item that was renamed on this
+ * device comes back as a new one rather than being silently skipped. That is
+ * the honest behaviour: the code IS the identity everything else relies on.
+ */
+export function previewMissingSeedItems() {
+  const existing = new Set(getMenu().map((item) => item.code));
+  const missing = MENU_SEED.filter((item) => !existing.has(menuCode(item.name, item.category)));
+
+  const counts = new Map();
+  for (const item of missing) counts.set(item.category, (counts.get(item.category) || 0) + 1);
+
+  return {
+    count: missing.length,
+    categories: [...counts.entries()].map(([category, count]) => ({ category, count })),
+  };
+}
+
+export async function addMissingSeedItems() {
+  requireAdmin('adding items from the menu file');
+
+  const existing = new Set(getMenu().map((item) => item.code));
+  const missing = buildSeedItems().filter((item) => !existing.has(item.code));
+
+  if (!missing.length) {
+    return { added: 0, skipped: MENU_SEED.length, categories: [] };
+  }
+
+  // New items go on the end of the list rather than interleaving with a menu
+  // somebody has already put in the order they like.
+  let sortOrder = getMenu().reduce((max, item) => Math.max(max, item.sortOrder ?? 0), -1) + 1;
+  const items = missing.map((item) => ({ ...item, sortOrder: sortOrder++ }));
+
+  await putMany(STORES.MENU, items);
+  await loadMenu();
+  announce();
+
+  return {
+    added: items.length,
+    skipped: MENU_SEED.length - items.length,
+    categories: [...new Set(items.map((item) => item.category))],
+  };
+}
+
 /** Admin action: throw away the working menu and reload from menu.seed.js. */
 export async function resetMenuToSeed() {
   requireAdmin('resetting the menu');

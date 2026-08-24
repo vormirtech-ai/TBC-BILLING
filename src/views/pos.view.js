@@ -219,7 +219,7 @@ export function renderPos({ outlet }) {
       cartList.appendChild(
         el('div.cart__empty', {}, [
           el('p.cart__emptytitle', { text: 'No items yet' }),
-          el('p.cart__emptytext', { text: 'Tap a drink to start the order.' }),
+          el('p.cart__emptytext', { text: 'Tap an item to start the order.' }),
         ])
       );
     } else {
