@@ -87,7 +87,12 @@ create policy "cafe counters" on tbc_counters for all using (true) with check (t
 
 grant usage on schema public to anon;
 grant all on tbc_sync, tbc_counters to anon;
-grant execute on function tbc_next_order_no, tbc_peek_order_no to anon;`;
+grant execute on function tbc_next_order_no, tbc_peek_order_no to anon;
+
+-- Supabase keeps a cached picture of the database for its API. It normally
+-- refreshes itself, but not always straight away — and until it does, the app
+-- is told the table does not exist. This nudges it.
+notify pgrst, 'reload schema';`;
 
 export async function renderSetup({ outlet }) {
   const settings = getSettings();
@@ -95,6 +100,7 @@ export async function renderSetup({ outlet }) {
 
   const statusPanel = el('div.stack');
   const resultLine = el('p.hint');
+  const sqlBox = el('pre.setup__sql', { text: SETUP_SQL });
 
   /* ------------------------------------------------------------ fields --- */
 
@@ -161,6 +167,14 @@ export async function renderSetup({ outlet }) {
     const result = await testConnection(draftConfig());
     resultLine.textContent = result.message;
     resultLine.className = result.ok ? 'hint is-positive' : 'hint is-negative';
+
+    // Being told to run the SQL is no help while the SQL is off the top of the
+    // screen. Take them to it.
+    if (result.reason === 'NO_TABLE' || result.reason === 'NO_FUNCTION') {
+      sqlBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      sqlBox.classList.add('is-wanted');
+      setTimeout(() => sqlBox.classList.remove('is-wanted'), 2600);
+    }
     return result;
   }
 
@@ -309,8 +323,6 @@ export async function renderSetup({ outlet }) {
   }
 
   /* ---------------------------------------------------------- assembly --- */
-
-  const sqlBox = el('pre.setup__sql', { text: SETUP_SQL });
 
   const page = el('div.page', {}, [
     el('div.page__head', {}, [

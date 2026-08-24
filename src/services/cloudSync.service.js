@@ -108,7 +108,7 @@ export async function testConnection(overrides = {}) {
       return {
         ok: false,
         reason: 'NO_TABLE',
-        message: `Connected to the project, but it has no table called "${config.table}" yet. Run the setup SQL below.`,
+        message: `Connected to the project — the address and key are right. It just has no "${config.table}" table yet: run the setup SQL in step 2, then test again.`,
       };
     }
     if (error?.status === 401 || error?.status === 403) {
@@ -134,7 +134,7 @@ export async function testConnection(overrides = {}) {
         ok: false,
         reason: 'NO_FUNCTION',
         message:
-          'The table is there, but the bill-numbering function is missing. Run the whole setup SQL below, then test again.',
+          'The table is there, but the bill-numbering function is missing — only part of the SQL ran. Run the whole block in step 2 again, then test again.',
       };
     }
     // Anything else here is not worth blocking on: numbering falls back to

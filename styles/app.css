@@ -3309,6 +3309,24 @@ body.is-customer {
   tab-size: 2;
 }
 
+/* The SQL block when the connection test says it is what is missing. */
+.setup__sql.is-wanted {
+  outline: 3px solid var(--jamun);
+  outline-offset: 3px;
+  animation: sql-wanted 0.9s ease-in-out 2;
+}
+
+@keyframes sql-wanted {
+  0%, 100% { outline-color: var(--jamun); }
+  50% { outline-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup__sql.is-wanted {
+    animation: none;
+  }
+}
+
 .setup__join {
   display: grid;
   gap: 14px;
