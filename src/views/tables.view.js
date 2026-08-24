@@ -55,9 +55,15 @@ export async function renderTables({ outlet }) {
         el('span.qrcard__table', { text: table.name }),
       ]),
       el('div.qrcard__code', {}, [
-        // Medium correction: a card on a cafe table gets ring-marked and
-        // scuffed, and medium still scans with a quarter of it damaged.
-        renderQrSvg(url, { size, ecc: ECC.MEDIUM, title: `Order at ${table.name}` }),
+        // A card that carries the cafe connection holds a lot more, so it drops
+        // to the lighter correction level to keep the pattern coarse enough to
+        // scan from across a table. A menu-only card keeps the sturdier level,
+        // which shrugs off the ring marks a cafe table inflicts on it.
+        renderQrSvg(url, {
+          size,
+          ecc: url.length > 200 ? ECC.LOW : ECC.MEDIUM,
+          title: `Order at ${table.name}`,
+        }),
       ]),
       el('p.qrcard__call', { text: 'Scan to see the menu and order' }),
       el('p.qrcard__zone', { text: table.zone && table.zone !== 'Main' ? table.zone : '' }),
@@ -413,7 +419,10 @@ export async function renderTables({ outlet }) {
             title: `Show the QR code for ${table.name}`,
             'aria-label': `Show the QR code for ${table.name}`,
             onclick: () => showQr(table),
-            html: qrSvgMarkup(tablesRepo.tableOrderUrl(table), { size: 132, ecc: ECC.MEDIUM }),
+            html: qrSvgMarkup(tablesRepo.tableOrderUrl(table), {
+              size: 132,
+              ecc: tablesRepo.tableOrderUrl(table).length > 200 ? ECC.LOW : ECC.MEDIUM,
+            }),
           }),
 
           table.notes ? el('p.tablecard__note', { text: table.notes }) : null,

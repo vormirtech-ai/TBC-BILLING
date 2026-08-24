@@ -27,6 +27,7 @@ import {
   runTransaction,
   promisify,
 } from '../db/database.js';
+import { enqueueForSync } from '../db/database.js';
 import { requireAdmin, requireSignedIn, getSession } from '../core/session.js';
 import { AppError, uid, matchesQuery, businessDateKey } from '../core/utils.js';
 import { STOCK_MOVEMENT_KINDS, STOCK_UNITS } from '../config/app.config.js';
@@ -177,11 +178,9 @@ export async function createStockItem(draft) {
     updatedAt: now,
   };
 
-  await runTransaction([STORES.INVENTORY, STORES.STOCK_MOVEMENTS], 'readwrite', (stores) => {
-    stores[STORES.INVENTORY].put(item);
-    if (opening > 0) {
-      stores[STORES.STOCK_MOVEMENTS].put(
-        movementRecord({
+  const opener =
+    opening > 0
+      ? movementRecord({
           stockId: item.id,
           kind: STOCK_MOVEMENT_KINDS.OPENING,
           change: opening,
@@ -189,9 +188,15 @@ export async function createStockItem(draft) {
           note: 'Opening count',
           session,
         })
-      );
-    }
+      : null;
+
+  await runTransaction([STORES.INVENTORY, STORES.STOCK_MOVEMENTS], 'readwrite', (stores) => {
+    stores[STORES.INVENTORY].put(item);
+    if (opener) stores[STORES.STOCK_MOVEMENTS].put(opener);
   });
+
+  await enqueueForSync(STORES.INVENTORY, item.id);
+  if (opener) await enqueueForSync(STORES.STOCK_MOVEMENTS, opener.id);
 
   cache = sortItems([...getInventory(), item]);
   announce();
@@ -242,6 +247,7 @@ export async function adjustStock(id, change, { kind, note = '', reference = '' 
   // Receiving deliveries is routine counter work; writing off stock is not.
   if (kind !== STOCK_MOVEMENT_KINDS.RECEIVED) requireAdmin('changing stock levels');
 
+  let movementId = null;
   const updated = await runTransaction(
     [STORES.INVENTORY, STORES.STOCK_MOVEMENTS],
     'readwrite',
@@ -256,20 +262,24 @@ export async function adjustStock(id, change, { kind, note = '', reference = '' 
 
       const next = { ...item, quantity: balanceAfter, updatedAt: new Date().toISOString() };
       stores[STORES.INVENTORY].put(next);
-      stores[STORES.STOCK_MOVEMENTS].put(
-        movementRecord({
-          stockId: id,
-          kind,
-          change: applied,
-          balanceAfter,
-          note,
-          reference,
-          session,
-        })
-      );
+
+      const movement = movementRecord({
+        stockId: id,
+        kind,
+        change: applied,
+        balanceAfter,
+        note,
+        reference,
+        session,
+      });
+      stores[STORES.STOCK_MOVEMENTS].put(movement);
+      movementId = movement.id;
       return next;
     }
   );
+
+  await enqueueForSync(STORES.INVENTORY, id);
+  if (movementId) await enqueueForSync(STORES.STOCK_MOVEMENTS, movementId);
 
   cache = sortItems(getInventory().map((row) => (row.id === id ? updated : row)));
   announce();
@@ -368,13 +378,16 @@ export function recipeCost(recipe) {
  * @param {Record<string, IDBObjectStore>} stores  must include recipes, inventory, movements
  * @param {object} record     the transaction being written
  * @param {number} direction  -1 to consume on a sale, +1 to put back on a void
- * @returns {Promise<{deducted:number, shortages:{name:string}[]}>}
+ * @returns {Promise<{deducted:number, shortages:{name:string}[],
+ *   touched:{inventory:string[], movements:string[]}}>} the ids it wrote, so
+ *   the caller can queue them for the shared database once the sale commits
  */
 export async function applySaleToStock(stores, record, direction = -1) {
   const recipes = stores[STORES.RECIPES];
   const inventory = stores[STORES.INVENTORY];
   const movements = stores[STORES.STOCK_MOVEMENTS];
-  if (!recipes || !inventory || !movements) return { deducted: 0, shortages: [] };
+  const touched = { inventory: [], movements: [] };
+  if (!recipes || !inventory || !movements) return { deducted: 0, shortages: [], touched };
 
   const reversing = direction > 0;
   const kind = reversing ? STOCK_MOVEMENT_KINDS.SALE_REVERSAL : STOCK_MOVEMENT_KINDS.SALE;
@@ -408,21 +421,24 @@ export async function applySaleToStock(stores, record, direction = -1) {
     }
 
     inventory.put({ ...item, quantity: balanceAfter, updatedAt: record.createdAt });
-    movements.put(
-      movementRecord({
-        stockId,
-        kind,
-        change: applied,
-        balanceAfter,
-        note: reversing ? `Bill ${record.orderNo} voided` : `Sold on ${record.orderNo}`,
-        reference: record.orderNo || record.id,
-        session: { username: record.cashier },
-      })
-    );
+
+    const movement = movementRecord({
+      stockId,
+      kind,
+      change: applied,
+      balanceAfter,
+      note: reversing ? `Bill ${record.orderNo} voided` : `Sold on ${record.orderNo}`,
+      reference: record.orderNo || record.id,
+      session: { username: record.cashier },
+    });
+    movements.put(movement);
+
+    touched.inventory.push(stockId);
+    touched.movements.push(movement.id);
     deducted += 1;
   }
 
-  return { deducted, shortages };
+  return { deducted, shortages, touched };
 }
 
 /**

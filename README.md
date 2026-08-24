@@ -1,12 +1,17 @@
 # The Baruch Cafe — Billing & POS
 
 A complete point-of-sale, billing and cafe-management system for The Baruch
-Cafe. It runs entirely in the browser, needs no server, and deploys to GitHub
-Pages as-is.
+Cafe. It is a static site — it deploys to GitHub Pages as-is, with no build
+step — and it connects to one shared database so every till, tablet and laptop
+sees the same cafe.
 
-Billing and bill history, table QR ordering, stock control with recipes, and
-staff attendance with an editable rota — plus a per-day Excel export that an
-accountant can open without asking any questions.
+Billing and bill history, table QR ordering that reaches the counter by itself,
+stock control with recipes, and staff attendance with an editable rota — plus a
+per-day Excel export that an accountant can open without asking any questions.
+
+**Start here:** deploy it, sign in, then open **Settings → The cafe database**
+and connect it. Until you do, each device keeps its own separate books, and the
+app tells you so in the top bar.
 
 ---
 
@@ -20,13 +25,13 @@ accountant can open without asking any questions.
 6. [Sign-in accounts](#sign-in-accounts)
 7. [The menu](#the-menu)
 8. [Tables and QR ordering](#tables-and-qr-ordering)
-9. [Live QR ordering (optional)](#live-qr-ordering-optional)
+9. [The cafe database](#the-cafe-database)
 10. [Stock](#stock)
 11. [Staff, attendance and the rota](#staff-attendance-and-the-rota)
 12. [Where the data lives](#where-the-data-lives)
 13. [Excel export](#excel-export)
 14. [Backup and restore](#backup-and-restore)
-15. [Limitations of static hosting](#limitations-of-static-hosting)
+15. [What static hosting means](#what-running-on-a-static-host-does-and-does-not-mean)
 16. [Moving to a real backend later](#moving-to-a-real-backend-later)
 17. [Project layout](#project-layout)
 18. [Automated tests](#automated-tests)
@@ -52,9 +57,20 @@ accountant can open without asking any questions.
 **For the customer**
 
 - Scan the QR code on the table, see the menu on their own phone, and send an
-  order to the counter. No app to install and no sign-in.
+  order straight to the counter. No app to install and no sign-in.
+- The counter's Orders button turns red and chimes the moment it arrives.
 - Nothing is charged on the phone. An order is a request; staff confirm it and
   payment happens as usual.
+
+**Across devices**
+
+- One shared database. Bills, menu, stock, staff, rota and tables are the
+  cafe's, not one browser's.
+- The same username and password work on every device.
+- Bill numbers are handed out by the database, so two tills billing at once
+  cannot produce the same one.
+- The counter keeps selling when the internet drops, and catches up by itself
+  afterwards.
 
 **For the admin**
 
@@ -85,14 +101,16 @@ accountant can open without asking any questions.
 | Layer | Choice | Why |
 | --- | --- | --- |
 | UI | Plain ES modules + CSS | No build step, no framework runtime, nothing to break at the counter |
-| Storage | IndexedDB | Structured, transactional, survives refreshes and offline use |
+| Storage | IndexedDB on the device, synced to Postgres | The till never waits on a network to take money; the cafe still shares one set of books |
+| Sync | PostgREST over a free Supabase project | One table, two functions, no server of your own to run |
 | Excel | Hand-written OOXML writer (`src/lib/xlsx.js`) | No CDN dependency; exports work with no internet |
 | Routing | Hash routes (`#/pos`) | Works at any GitHub Pages base path with zero configuration |
 | Money | Integer paise, everywhere | Floating-point rupees drift; a till that drifts is a till nobody trusts |
 
 There are **no runtime dependencies** — no npm install, no bundler, no
-`node_modules`. The two web fonts load from Google Fonts and fall back to system
-faces if the cafe's internet is down.
+`node_modules`, and no SDK for the database either: it is spoken to over plain
+`fetch`. The two web fonts load from Google Fonts and fall back to system faces
+if the cafe's internet is down.
 
 ---
 
@@ -246,26 +264,27 @@ nothing is charged on the phone, and a member of staff confirms the order.
 
 ### How an order reaches the counter
 
-This is the one place where "a static site with no server" has real
-consequences, so it is worth being plain about it.
+**With the cafe database connected — the way this is meant to run — it just
+arrives.** The customer presses Send, and within a few seconds the counter's
+Orders button turns red, shows a count and chimes. Nobody scans anything. The
+table card itself carries the connection, so a phone that has never been to your
+cafe can reach it the moment it scans the code.
 
-GitHub Pages serves files. It has no database. A customer's phone and the
-counter each keep their own storage, in their own browser, and nothing travels
-between them by itself. So the app uses whichever of three routes is available:
+Accepting an order loads it onto the till, priced from the counter's own menu,
+ready for payment. The customer's phone follows along: *Order sent* becomes
+*Confirmed*, then *On its way*.
 
-| Route | When it is used | What happens |
+Two fallbacks exist for when the database is not connected, so an order is never
+simply lost:
+
+| Route | When | What happens |
 | --- | --- | --- |
 | **Same browser** | The customer menu is open in another tab on the counter device | The order appears in the queue instantly |
-| **Handoff code** | The default, with no setup at all | The customer's phone shows a QR code and four characters; the counter scans or types it |
-| **Shared backend** | You filled in the live-ordering settings | The order arrives at the counter on its own, within seconds |
+| **Handoff code** | No database connected | The phone shows a QR code and four characters; the counter scans or types them |
 
-**The handoff code is not a workaround, it is a working method.** The customer's
-phone shows a code; on **Orders**, press **Scan a customer's code**, hold it up
-to the camera — or type the four characters — and the order lands on the till,
-priced and ready for payment. It needs no network at all.
-
-If you want orders to arrive by themselves, set up the shared backend below. It
-takes about five minutes and is free.
+The handoff code is a genuine working method — it needs no network whatsoever —
+but it asks a customer to wave a phone at a cashier, which is not what you want
+during a rush. Connect the database and it never comes up.
 
 ### Publishing the menu
 
@@ -283,67 +302,82 @@ counter prices every order from its own menu when it is billed.**
 
 ---
 
-## Live QR ordering (optional)
+## The cafe database
 
-Skip this section entirely if the handoff code suits you. Everything else in the
-app works without it.
+**This is the part that makes it a cafe system rather than a till with a good
+memory.** Connect it and every device shares one set of data:
 
-Turning this on lets an order sent from any phone, anywhere, land on the counter
-by itself. It uses [Supabase](https://supabase.com), whose free tier is far more
-than a cafe needs.
+- A bill rung up on the counter appears on the manager's laptop.
+- The same username and password work on every device.
+- An order from a customer's phone lands on the counter within seconds, with no
+  code to scan and nobody to fetch.
+- Menu, stock, staff, rota and tables are the cafe's, not one browser's.
 
-**1. Create the project.** Sign up, create a project, and wait for it to finish
-setting up.
+Without it, every device keeps its own separate books. The app says so plainly
+rather than letting you find out later: the top bar reads **"This device only"**
+in amber until you connect it.
 
-**2. Create one table.** Open the SQL editor and run this:
+### Setting it up
 
-```sql
-create table if not exists tbc_sync (
-  id         bigint generated always as identity primary key,
-  kind       text        not null,
-  ref        text        not null,
-  status     text,
-  payload    jsonb       not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+There is a guided screen for this — **Settings → The cafe database → Set up**,
+or the amber chip in the top bar. It walks through the four steps, checks its
+own work, and copies the SQL for you. In short:
 
--- One row per order, and one for the published menu.
-create unique index if not exists tbc_sync_ref_idx on tbc_sync (ref);
-create index if not exists tbc_sync_kind_idx on tbc_sync (kind, updated_at);
+**1. Create a free database.** Sign up at [supabase.com](https://supabase.com)
+and create a project. The free plan is far more than a cafe needs.
 
-alter table tbc_sync enable row level security;
+**2. Run the setup SQL.** Open the SQL Editor in your project, paste in the
+block the setup screen gives you, and press Run. Once, ever. It creates one
+table, one index, and two small functions for handing out bill numbers.
 
--- A customer's phone must be able to send an order and read its own menu, and
--- the counter must be able to read the queue and update what it has dealt with.
-create policy "cafe ordering" on tbc_sync
-  for all using (true) with check (true);
-```
+**3. Connect this device.** Project Settings → API gives you the **Project URL**
+and the **anon public** key. Paste both into the setup screen and press Connect.
 
-**3. Point the app at it.** In Supabase, **Project Settings → API** gives you the
-**Project URL** and the **anon public** key. In the app, open **Settings → Live
-ordering**, paste both in, press **Test connection**, then **Save**. Reload the
-page and the counter starts collecting orders.
+The app then works out which situation it is in, rather than guessing:
 
-**4. Publish the menu** from **Menu → Publish for QR ordering → Publish live**.
+- **The database is empty** — this device's cafe becomes the shared data.
+  Nothing is lost, and everything already on the till is uploaded.
+- **The database already has a cafe in it** — this device adopts it. It says so
+  first, and downloads a backup before replacing anything.
 
-### What is and is not sent
+**4. Add your other devices.** Press **Show the pairing code** and scan it from
+the next till, tablet or laptop. It picks up the connection, pulls the cafe's
+data, and the same staff logins work immediately. No typing a JWT on a phone
+keyboard.
 
-Sent: order lines, table names, and the published menu.
+### What it does when the internet drops
 
-Never sent: your takings, your bills, your stock, your staff records, your
-passwords. Those stay on the till.
+It keeps selling. Every write goes to the device first and queues for the
+database, so the counter never waits on a network. When the connection returns
+the queue drains by itself. The top-bar chip turns red and shows how many
+records are still waiting.
 
-### Read this before turning it on
+Bills taken during an outage get a device tag on the end — `ORD-000042-K7` —
+because two tills that cannot see each other must not both decide they are on
+bill 42. Once online, numbers come from the database and are unique across
+every device.
 
-The anon key is public by design — it sits in the browser of every customer who
-scans a code. Treat that table as readable and writable by anyone who has the
-key. That is exactly why **an order is only ever a request that staff accept**,
-why no payment is taken online, and why the counter prices every order itself.
-The worst a stranger can do is put a fake order in the queue for someone to
-decline.
+### Who can read and write it
 
-Use the **anon public** key. Never the service role key.
+The anon key is public by design; every Supabase web app ships one in its own
+JavaScript. What protects the data is the app's own rules:
+
+- A device with **nobody signed in** — a customer's phone — may write exactly
+  one thing: the order it just placed. It cannot push a menu, settings, staff
+  or bills, and the sync layer enforces that rather than trusting the screen.
+- An order is a **request**. No payment happens on the phone, and staff accept
+  it before it becomes a bill.
+- The counter **prices every order from its own menu**, so a stale price on a
+  customer's phone can never decide what is charged.
+
+The table cards carry the connection so a scanned phone can reach the database,
+which keeps the key on printed cards in your cafe rather than on the open web.
+Treat a table card the way you would a spare key: fine on the table, not worth
+posting online. If one goes missing, **New code** on the Tables screen retires
+it instantly.
+
+Use the **anon public** key. Never the service role key — that one bypasses
+every rule above and must not leave the Supabase dashboard.
 
 ---
 
@@ -407,15 +441,23 @@ is eight hours, not a negative day.
 
 ## Where the data lives
 
-Everything is stored in **IndexedDB in the browser on the device running the
-app**, in fourteen stores: menu items, transactions, business days, settings,
-counters, users, inventory, stock movements, recipes, staff, shifts,
-attendance, tables and online orders.
+Every device keeps a full copy in **IndexedDB in its own browser**, across
+fifteen stores: menu items, transactions, business days, settings, counters,
+users, inventory, stock movements, recipes, staff, shifts, attendance, tables,
+online orders, and the outbox of changes still to be shared.
 
-**Upgrading from version 1.** A till already holding sales keeps every one of
-them. The database upgrade only creates the stores that are missing, and menu
-items are quietly given the stable code that QR ordering needs. Nothing to do
-but deploy.
+**That local copy is the working set, not the master.** Writes go there first so
+the counter never waits on a network, and each one queues in the outbox in the
+same storage transaction — a bill and the reminder to send it cannot come apart.
+A loop then pushes the queue up and pulls back everything changed elsewhere.
+Where two devices disagree, the last write wins, judged by the database's clock
+rather than either device's.
+
+**Upgrading from an older version.** A till already holding sales keeps every
+one of them. The upgrade only creates the stores that are missing, quietly gives
+menu items the stable code QR ordering needs, and rebuilds the bill-number index
+so bills synced in from another till are never refused. Nothing to do but
+deploy.
 
 **Business days.** A day record is created by the first sale taken on a date, so
 Day 1, Day 2, Day 3 follow *trading* days — a closed Monday does not consume a
@@ -497,29 +539,32 @@ for persistent storage on startup, which helps, but a file in your Drive helps m
 
 ---
 
-## Limitations of static hosting
+## What running on a static host does and does not mean
 
-**This deployment uses local browser storage. Data created on one device will not
-automatically appear on another device.**
+GitHub Pages serves files. It runs no code of its own and holds no data. That
+shapes two things, and it is worth being plain about both.
 
-What that means day to day:
+**What it does not stop.** The cafe's data is shared, because the app talks to
+a database of your own rather than to the host. Bills, menu, stock and staff go
+where every device can see them, and QR orders reach the counter on their own.
+See [The cafe database](#the-cafe-database).
 
-- The counter iPad and the manager's laptop each keep their own separate set of
-  bills. Bill numbering is per device, so two devices billing at once will both
-  produce an `ORD-000042`.
-- The same applies to stock, staff and tables: they live on the till that
-  recorded them.
-- **QR orders are the exception**, and only if you set up live ordering. Without
-  it, a customer's order reaches the counter as a code staff scan — which works
-  between any two devices, with no network at all. See
-  [Tables and QR ordering](#tables-and-qr-ordering).
-- **Run billing on one device.** To review sales elsewhere, export a backup from
-  the till and restore it on the other device.
-- Clearing browser data for the site erases the sales history on that device.
-- Private/incognito windows discard everything on close — the app will warn you
-  if it cannot open storage at all.
-- Signing out ends the session; closing the tab does too, by design, so an
-  unattended till does not stay open.
+**What it does mean.**
+
+- **Until you connect the database, every device keeps its own books.** A bill
+  rung up on the counter will not appear on your laptop, bill numbers are per
+  device, and an order from a customer's phone has to be handed over as a code.
+  The top bar shows an amber **"This device only"** while that is the case.
+- **The menu customers see is a published copy.** A phone that has never opened
+  your site cannot read the counter's database until it scans a table card, so
+  publish the menu after changing prices — **Menu → Publish for QR ordering**.
+- **Clearing browser data still clears that device.** With the database
+  connected the data comes back on the next sync, which is one of the better
+  reasons to connect it. Keep taking backups regardless.
+- **Private windows discard everything on close**, and the app will warn you if
+  it cannot open storage at all.
+- **Signing out ends the session**, and so does closing the tab, by design, so
+  an unattended till does not stay open.
 
 ---
 
@@ -569,6 +614,7 @@ src/
     money.js                integer-paise maths and formatting
     quantity.js             integer-thousandths maths for stock
     utils.js                DOM helpers, dates, business-day keys, files
+    device.js               this browser's id and its bill-number tag
     session.js              who is signed in; requireAdmin guard
     router.js               hash router
   db/database.js            the only file that speaks IndexedDB
@@ -578,10 +624,13 @@ src/
   repositories/             menu, transactions, business days, settings, users,
                             inventory, staff, tables, online orders
   services/                 pricing, cart, orders, auth, export, backup, reports,
-                            order channel, cloud sync, published menu
+                            order channel, published menu
+    cloudSync.service.js    speaks to the shared database over plain fetch
+    sync.service.js         push, pull, outbox, and who wins a disagreement
   ui/                       shell, modals, toasts, receipt
   views/                    login, pos, dashboard, history, menu, settings,
-                            tables, orders, inventory, staff, customer
+                            tables, orders, inventory, staff, customer,
+                            setup (connect the database), join (pair a device)
 
 tests/
   run.mjs                   runs everything below
@@ -613,6 +662,12 @@ that must not drift), shift and attendance maths (including shifts that cross
 midnight), the handoff code that carries an order between two devices — proving
 a mistyped one is refused and that no price ever travels in it — and the stable
 menu codes two devices use to agree on what an item is.
+
+Cross-device behaviour cannot be tested this way — it needs two browsers and a
+database — so it is covered by driving the real app against a stand-in for
+PostgREST: a bill made on one device appearing on another, one login working on
+a device that never had it, a QR order arriving on its own, and a bill taken with
+the network pulled out reaching the other device once it returns.
 
 **`qrcode.test.mjs` — 138.** The QR encoder, round-tripped through an
 independent decoder written into the test file: every correction level, every
@@ -654,6 +709,22 @@ Worth walking through after any change:
 18. **Rota** — add a shift, edit it, copy a day onto another day.
 19. **Attendance** — clock someone in and out, then correct the times and check
     the hours follow.
+
+With the cafe database connected:
+
+20. **Two devices** — connect the counter, pair a second device with the code,
+    and check the top bar reads **Shared** on both.
+21. **A bill crosses over** — ring one up on the counter; it should appear in
+    Bills on the other device within a few seconds.
+22. **One login everywhere** — change the admin password on one device and sign
+    in with it on the other.
+23. **Bill numbers** — bill from both devices and confirm the numbers do not
+    collide.
+24. **A QR order arrives by itself** — order from a phone and watch the counter's
+    Orders button turn red without anybody scanning anything.
+25. **Pull the network out** — take a bill with wi-fi off (it should still go
+    through, numbered like `ORD-000042-K7`), then reconnect and confirm it
+    reaches the other device.
 
 ---
 

@@ -338,7 +338,7 @@ export async function renderOrders({ outlet }) {
           el('p', { text: 'No orders waiting.' }),
           el('p.hint', {
             text: isCloudEnabled()
-              ? 'Orders from table QR codes appear here on their own.'
+              ? 'Orders from table QR codes appear here on their own, and this counter makes a sound when one arrives.'
               : 'When a customer orders from their phone, use “Scan a customer’s code” to bring it in.',
           }),
         ])
@@ -385,19 +385,27 @@ export async function renderOrders({ outlet }) {
             }
           },
         }),
-        el('button.btn.btn--primary', {
+        // With the cafe database connected, orders arrive on their own and
+        // this is only ever a fallback, so it stops being the loudest button
+        // on the screen.
+        el(isCloudEnabled() ? 'button.btn.btn--ghost' : 'button.btn.btn--primary', {
           type: 'button',
-          text: 'Scan a customer’s code',
+          text: isCloudEnabled() ? 'Enter a code by hand' : 'Scan a customer’s code',
           onclick: openScanner,
         }),
       ]),
     ]),
 
-    el('p.callout', {
-      text: isCloudEnabled()
-        ? 'Live ordering is on: orders sent from a phone arrive here by themselves.'
-        : 'This counter is running on-device. Orders arrive from another tab on this device, or by scanning the code on a customer’s phone. Turn on live ordering in Settings to have them arrive by themselves.',
-    }),
+    isCloudEnabled()
+      ? null
+      : el('p.callout.callout--warn', {}, [
+          el('strong', { text: 'Orders cannot reach this counter on their own yet. ' }),
+          el('span', {
+            text:
+              'This device is storing data by itself, so an order from a customer’s phone has to be handed over as a code. Connect the cafe database and they arrive here within seconds.',
+          }),
+          el('a.btn.btn--primary.btn--sm', { href: '#/setup', text: 'Set up the cafe database' }),
+        ]),
 
     waitingList,
     recentList,

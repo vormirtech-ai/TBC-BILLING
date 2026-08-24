@@ -18,6 +18,7 @@ import { formatMoney } from '../core/money.js';
 import { renderQrSvg, ECC } from '../lib/qrcode.js';
 import { parseHash } from '../core/router.js';
 import { ONLINE_ORDER_STATUS } from '../config/app.config.js';
+import { applyDeviceSettings } from '../repositories/settings.repo.js';
 import { loadPublicMenu } from '../services/publicMenu.service.js';
 import { sendOrder, encodeHandoff, deviceId, deliveryRoute } from '../services/orderChannel.service.js';
 import * as ordersRepo from '../repositories/onlineOrders.repo.js';
@@ -54,6 +55,30 @@ export async function renderCustomerOrder({ outlet }) {
   const { query } = parseHash();
   const token = String(query.t || '').trim();
   const tableNameFromLink = String(query.n || '').trim();
+
+  // The table card can carry the cafe's connection, which is the only way a
+  // phone that has never been here can send an order straight to the counter.
+  // Stored device-only: this phone will never push anything but its own order.
+  if (query.c) {
+    try {
+      const normalised = String(query.c).replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalised + '='.repeat((4 - (normalised.length % 4)) % 4);
+      const connection = JSON.parse(atob(padded));
+
+      if (connection?.v === 1 && connection.url && connection.key) {
+        await applyDeviceSettings({
+          cloudSyncUrl: String(connection.url),
+          cloudSyncKey: String(connection.key),
+          cloudSyncTable: String(connection.table || 'tbc_sync'),
+          cloudSyncEnabled: true,
+        });
+      }
+    } catch (error) {
+      // A damaged code still shows the menu; the order just falls back to
+      // being handed over rather than travelling on its own.
+      console.error('[TBC POS] the table code carried an unreadable connection', error);
+    }
+  }
 
   clear(outlet).appendChild(el('div.loading', { text: 'Opening the menu…' }));
 

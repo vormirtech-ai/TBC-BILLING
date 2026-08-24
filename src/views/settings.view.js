@@ -12,7 +12,7 @@ import { exportBackup, inspectBackup, restoreBackup } from '../services/backup.s
 import { openModal, confirmDialog } from '../ui/modal.js';
 import { toast, reportError } from '../ui/toast.js';
 import { APP } from '../config/app.config.js';
-import { testConnection } from '../services/cloudSync.service.js';
+import { cloudConfig } from '../services/cloudSync.service.js';
 import * as tablesRepo from '../repositories/tables.repo.js';
 
 function section(title, description, body) {
@@ -509,82 +509,54 @@ export async function renderSettings({ outlet }) {
     ]),
   ]);
 
-  /* ------------------------------------------------------ live ordering --- */
+  /* ----------------------------------------------------- cafe database --- */
 
-  const cloudEnabled = checkField(
-    'Send orders straight to this counter',
-    settings.cloudSyncEnabled,
-    'Without this, an order from a customer’s phone is handed over as a code the counter scans.'
-  );
-  const cloudUrl = textField('Project URL', settings.cloudSyncUrl, {
-    placeholder: 'https://xxxxxxxx.supabase.co',
-  });
-  const cloudKey = textField('Public API key', settings.cloudSyncKey, {
-    placeholder: 'The anon public key',
-    hint: 'Use the anon public key, never the service role key.',
-  });
-  const cloudTable = textField('Table name', settings.cloudSyncTable, { placeholder: 'tbc_sync' });
-  const cloudPoll = textField('Check for orders every (seconds)', settings.cloudSyncPollSeconds, {
-    inputmode: 'numeric',
-  });
-  const cloudResult = el('p.hint');
-
-  const cloudForm = el('div.formgrid', {}, [
-    cloudEnabled.field,
-    cloudUrl.field,
-    cloudKey.field,
-    cloudTable.field,
-    cloudPoll.field,
-    cloudResult,
-    el('div.form__actions', {}, [
-      el('button.btn.btn--ghost', {
-        type: 'button',
-        text: 'Test connection',
-        onclick: async (event) => {
-          const button = event.currentTarget;
-          button.disabled = true;
-          cloudResult.textContent = 'Checking…';
-          cloudResult.className = 'hint';
-          try {
-            const result = await testConnection({
-              url: cloudUrl.input.value.trim().replace(/\/+$/, ''),
-              key: cloudKey.input.value.trim(),
-              table: cloudTable.input.value.trim() || 'tbc_sync',
-            });
-            cloudResult.textContent = result.message;
-            cloudResult.className = result.ok ? 'hint is-positive' : 'hint is-negative';
-          } finally {
-            button.disabled = false;
-          }
-        },
+  const database = cloudConfig();
+  const databaseBody = el('div.stack', {}, [
+    el('div.setup__status', { class: database.enabled ? 'is-on' : 'is-off' }, [
+      el('div.setup__statushead', {}, [
+        el('span.setup__statusdot'),
+        el('strong', {
+          text: database.enabled
+            ? 'Sharing with the cafe database'
+            : database.configured
+            ? 'Set up, but sharing is switched off'
+            : 'This device is storing data on its own',
+        }),
+      ]),
+      el('p.setup__statustext', {
+        text: database.enabled
+          ? 'Bills, menu, stock and staff are shared. Signing in on another device shows the same data, and QR orders reach this counter by themselves.'
+          : 'Nothing recorded here appears on any other device, and an order from a customer’s phone has to be handed over as a code.',
       }),
-      el('button.btn.btn--primary', {
-        type: 'button',
-        text: 'Save live ordering',
-        onclick: async (event) => {
-          const seconds = Number(cloudPoll.input.value);
-          if (!Number.isInteger(seconds) || seconds < 5 || seconds > 600) {
-            toast.error('Check for orders every 5 to 600 seconds.');
-            return;
-          }
-          const button = event.currentTarget;
-          button.disabled = true;
-          try {
-            await saveSettings({
-              cloudSyncEnabled: cloudEnabled.input.checked,
-              cloudSyncUrl: cloudUrl.input.value.trim().replace(/\/+$/, ''),
-              cloudSyncKey: cloudKey.input.value.trim(),
-              cloudSyncTable: cloudTable.input.value.trim() || 'tbc_sync',
-              cloudSyncPollSeconds: seconds,
-            });
-            toast.success('Live ordering saved. Reload the page to start collecting orders.');
-          } catch (error) {
-            reportError(error);
-          } finally {
-            button.disabled = false;
-          }
-        },
+    ]),
+    el('div.actionrow', {}, [
+      el('a.btn.btn--primary', {
+        href: '#/setup',
+        text: database.configured ? 'Open database setup' : 'Set up the cafe database',
       }),
+      database.configured
+        ? el('button.btn.btn--ghost', {
+            type: 'button',
+            text: database.enabled ? 'Pause sharing on this device' : 'Resume sharing',
+            onclick: async (event) => {
+              const button = event.currentTarget;
+              button.disabled = true;
+              try {
+                await saveSettings({ cloudSyncEnabled: !database.enabled });
+                toast.success(
+                  database.enabled
+                    ? 'Sharing paused. This device keeps working and will catch up when you resume.'
+                    : 'Sharing resumed.'
+                );
+                setTimeout(() => window.location.reload(), 900);
+              } catch (error) {
+                reportError(error);
+                button.disabled = false;
+              }
+            },
+          })
+        : null,
     ]),
   ]);
 
@@ -818,9 +790,9 @@ export async function renderSettings({ outlet }) {
         qrForm
       ),
       section(
-        'Live ordering',
-        'Optional. Without it the app runs entirely on this device and orders are handed over as a code. With it, an order sent from any phone lands on this counter by itself. Setup takes about five minutes — the steps are in the README.',
-        cloudForm
+        'The cafe database',
+        'Where the cafe’s data actually lives, and whether this device shares it.',
+        databaseBody
       ),
       section('Shift defaults', 'Used when a new shift or attendance record is created.', shiftForm),
       section('Backup and restore', null, backupBody),

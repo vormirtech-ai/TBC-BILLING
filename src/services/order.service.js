@@ -16,6 +16,7 @@ import * as ordersRepo from '../repositories/onlineOrders.repo.js';
 import * as tablesRepo from '../repositories/tables.repo.js';
 import * as inventoryRepo from '../repositories/inventory.repo.js';
 import { announceStatus } from './orderChannel.service.js';
+import { nextOrderNumber, isCloudEnabled } from './cloudSync.service.js';
 import * as cart from './cart.service.js';
 
 export function isValidPaymentMethod(method) {
@@ -115,6 +116,10 @@ export async function completeSale(payment) {
     orderNumberPadding: settings.orderNumberPadding,
     businessDayStartNumber: settings.businessDayStartNumber,
     trackStock: Boolean(settings.stockTrackingEnabled),
+    // With a shared database, bill numbers come from it, so two tills billing
+    // at the same moment cannot both decide they are on bill 42.
+    sharedNumbering: isCloudEnabled(),
+    allocateNumber: isCloudEnabled() ? nextOrderNumber : null,
   });
 
   // Everything below here is tidying up after a sale that is already safely

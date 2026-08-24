@@ -28,11 +28,73 @@ export const STORES = {
   ATTENDANCE: 'attendance',
   TABLES: 'tables',
   ONLINE_ORDERS: 'onlineOrders',
+
+  /** Records waiting to be sent to the shared database. */
+  SYNC_OUTBOX: 'syncOutbox',
 };
+
+/**
+ * The primary key of each store, and by the same token the list of stores that
+ * belong to the cafe rather than to this device. Everything named here is kept
+ * in step with the shared database; anything not named here is local — the
+ * outbox itself, and the counters a till falls back on when it is offline.
+ */
+export const STORE_KEYS = {
+  [STORES.MENU]: 'id',
+  [STORES.TRANSACTIONS]: 'id',
+  [STORES.BUSINESS_DAYS]: 'date',
+  [STORES.SETTINGS]: 'key',
+  [STORES.USERS]: 'username',
+  [STORES.INVENTORY]: 'id',
+  [STORES.STOCK_MOVEMENTS]: 'id',
+  [STORES.RECIPES]: 'menuItemId',
+  [STORES.STAFF]: 'id',
+  [STORES.SHIFTS]: 'id',
+  [STORES.ATTENDANCE]: 'id',
+  [STORES.TABLES]: 'id',
+  [STORES.ONLINE_ORDERS]: 'id',
+};
+
+export const SYNCED_STORES = Object.keys(STORE_KEYS);
+
+export function isSyncedStore(storeName) {
+  return Object.prototype.hasOwnProperty.call(STORE_KEYS, storeName);
+}
+
+export function recordKey(storeName, record) {
+  return record?.[STORE_KEYS[storeName]];
+}
+
+function outboxEntry(storeName, key, deleted = false) {
+  return {
+    // One entry per record: a price edited five times before the network comes
+    // back queues once, not five times.
+    key: `${storeName}::${key}`,
+    store: storeName,
+    id: String(key),
+    deleted,
+    queuedAt: new Date().toISOString(),
+  };
+}
 
 let dbPromise = null;
 
-function upgrade(db) {
+/**
+ * Version 3 relaxed the orderNo index from unique to non-unique. An index
+ * cannot be altered in place, so it is dropped and recreated — which needs the
+ * running upgrade transaction, not just the database handle.
+ */
+function migrateIndexes(db, transaction) {
+  if (!transaction || !db.objectStoreNames.contains(STORES.TRANSACTIONS)) return;
+
+  const store = transaction.objectStore(STORES.TRANSACTIONS);
+  if (store.indexNames.contains('orderNo') && store.index('orderNo').unique) {
+    store.deleteIndex('orderNo');
+    store.createIndex('orderNo', 'orderNo', { unique: false });
+  }
+}
+
+function upgrade(db, transaction) {
   if (!db.objectStoreNames.contains(STORES.MENU)) {
     const menu = db.createObjectStore(STORES.MENU, { keyPath: 'id' });
     menu.createIndex('category', 'category', { unique: false });
@@ -41,7 +103,11 @@ function upgrade(db) {
   if (!db.objectStoreNames.contains(STORES.TRANSACTIONS)) {
     const tx = db.createObjectStore(STORES.TRANSACTIONS, { keyPath: 'id' });
     tx.createIndex('businessDate', 'businessDate', { unique: false });
-    tx.createIndex('orderNo', 'orderNo', { unique: true });
+    // Not unique. Bill numbers are allocated by the shared database and are
+    // unique in practice, but a till that billed while offline can produce one
+    // that another till already used. A duplicate number is a thing to notice
+    // and fix, not a reason to refuse to store somebody's sale.
+    tx.createIndex('orderNo', 'orderNo', { unique: false });
     tx.createIndex('createdAt', 'createdAt', { unique: false });
     tx.createIndex('cashier', 'cashier', { unique: false });
     tx.createIndex('paymentMethod', 'paymentMethod', { unique: false });
@@ -112,6 +178,18 @@ function upgrade(db) {
     orders.createIndex('placedAt', 'placedAt', { unique: false });
     orders.createIndex('tableId', 'tableId', { unique: false });
   }
+
+  /* ------------------------------------------------------------ sync --- */
+
+  // One row per record that still has to reach the shared database. Keyed by
+  // "store::id" so a record edited five times before the network comes back
+  // queues once, not five times.
+  if (!db.objectStoreNames.contains(STORES.SYNC_OUTBOX)) {
+    const outbox = db.createObjectStore(STORES.SYNC_OUTBOX, { keyPath: 'key' });
+    outbox.createIndex('queuedAt', 'queuedAt', { unique: false });
+  }
+
+  migrateIndexes(db, transaction);
 }
 
 export function openDatabase() {
@@ -136,7 +214,7 @@ export function openDatabase() {
       return;
     }
 
-    request.onupgradeneeded = (event) => upgrade(event.target.result);
+    request.onupgradeneeded = (event) => upgrade(event.target.result, event.target.transaction);
     request.onsuccess = () => {
       const db = request.result;
       db.onversionchange = () => db.close();
@@ -240,25 +318,158 @@ export async function getAllByIndex(storeName, indexName, value) {
   );
 }
 
+/**
+ * Write a record, and queue it for the shared database in the SAME storage
+ * transaction. Queuing separately would open a gap where a bill is saved on
+ * the till but nothing remembers to send it; here the two either both happen
+ * or neither does.
+ */
 export async function put(storeName, record) {
+  const tracked = isSyncedStore(storeName);
+  const names = tracked ? [storeName, STORES.SYNC_OUTBOX] : [storeName];
+
+  return runTransaction(names, 'readwrite', (stores) => {
+    stores[storeName].put(record);
+    if (tracked) {
+      stores[STORES.SYNC_OUTBOX].put(outboxEntry(storeName, recordKey(storeName, record)));
+    }
+    return record;
+  });
+}
+
+export async function putMany(storeName, records) {
+  const tracked = isSyncedStore(storeName);
+  const names = tracked ? [storeName, STORES.SYNC_OUTBOX] : [storeName];
+
+  return runTransaction(names, 'readwrite', (stores) => {
+    for (const record of records) {
+      stores[storeName].put(record);
+      if (tracked) {
+        stores[STORES.SYNC_OUTBOX].put(outboxEntry(storeName, recordKey(storeName, record)));
+      }
+    }
+    return records.length;
+  });
+}
+
+export async function remove(storeName, key) {
+  const tracked = isSyncedStore(storeName);
+  const names = tracked ? [storeName, STORES.SYNC_OUTBOX] : [storeName];
+
+  return runTransaction(names, 'readwrite', (stores) => {
+    stores[storeName].delete(key);
+    // A deletion has to travel too, or the record would come back on the next
+    // pull from a device that still has it.
+    if (tracked) stores[STORES.SYNC_OUTBOX].put(outboxEntry(storeName, key, true));
+    return true;
+  });
+}
+
+/**
+ * Write without queueing anything.
+ *
+ * Used only when applying what the shared database just sent us: queueing that
+ * would send it straight back, and the two devices would volley the same record
+ * between them forever.
+ */
+export async function putFromRemote(storeName, record) {
   return runTransaction(storeName, 'readwrite', (stores) => {
     stores[storeName].put(record);
     return record;
   });
 }
 
-export async function putMany(storeName, records) {
-  return runTransaction(storeName, 'readwrite', (stores) => {
-    for (const record of records) stores[storeName].put(record);
-    return records.length;
-  });
-}
-
-export async function remove(storeName, key) {
+export async function removeFromRemote(storeName, key) {
   return runTransaction(storeName, 'readwrite', (stores) => {
     stores[storeName].delete(key);
     return true;
   });
+}
+
+/**
+ * Apply a page of incoming records to one store in a single transaction.
+ *
+ * A device that has been off for a day comes back to thousands of changes.
+ * Opening a storage transaction per record turns that into a visibly frozen
+ * screen; one transaction per store per page keeps it to a blink.
+ *
+ * @param {string} storeName
+ * @param {object[]} records  records to write
+ * @param {string[]} deletions  keys to remove
+ */
+export async function applyRemoteBatch(storeName, records, deletions = []) {
+  if (!records.length && !deletions.length) return 0;
+
+  return runTransaction(storeName, 'readwrite', (stores) => {
+    for (const record of records) stores[storeName].put(record);
+    for (const key of deletions) stores[storeName].delete(key);
+    return records.length + deletions.length;
+  });
+}
+
+/* -------------------------------------------------------------- outbox --- */
+
+/** Queue a record written through a raw transaction, which cannot self-queue. */
+export async function enqueueForSync(storeName, key, deleted = false) {
+  if (!isSyncedStore(storeName) || key === undefined || key === null) return false;
+  try {
+    await runTransaction(STORES.SYNC_OUTBOX, 'readwrite', (stores) => {
+      stores[STORES.SYNC_OUTBOX].put(outboxEntry(storeName, key, deleted));
+    });
+    return true;
+  } catch (error) {
+    // Never let bookkeeping fail the sale it belongs to. The start-up sweep
+    // picks up anything that slips through here.
+    console.error('[TBC POS] could not queue a record for the shared database', error);
+    return false;
+  }
+}
+
+/**
+ * Queue many records at once.
+ *
+ * Handing a whole cafe over to the shared database means queueing every record
+ * it has. One storage transaction per record turns that into a several-second
+ * freeze on the setup screen; one transaction for the lot is instant.
+ *
+ * @param {{store:string, id:string|number, deleted?:boolean}[]} items
+ */
+export async function enqueueManyForSync(items) {
+  const valid = items.filter(
+    (item) => isSyncedStore(item.store) && item.id !== undefined && item.id !== null
+  );
+  if (!valid.length) return 0;
+
+  try {
+    await runTransaction(STORES.SYNC_OUTBOX, 'readwrite', (stores) => {
+      for (const item of valid) {
+        stores[STORES.SYNC_OUTBOX].put(outboxEntry(item.store, item.id, Boolean(item.deleted)));
+      }
+    });
+    return valid.length;
+  } catch (error) {
+    console.error('[TBC POS] could not queue records for the shared database', error);
+    return 0;
+  }
+}
+
+export async function readOutbox(limit = 400) {
+  const entries = await getAll(STORES.SYNC_OUTBOX);
+  return entries
+    .sort((a, b) => String(a.queuedAt).localeCompare(String(b.queuedAt)))
+    .slice(0, limit);
+}
+
+export async function clearOutboxEntries(keys) {
+  if (!keys.length) return 0;
+  return runTransaction(STORES.SYNC_OUTBOX, 'readwrite', (stores) => {
+    for (const key of keys) stores[STORES.SYNC_OUTBOX].delete(key);
+    return keys.length;
+  });
+}
+
+export function outboxSize() {
+  return count(STORES.SYNC_OUTBOX);
 }
 
 export async function clearStore(storeName) {

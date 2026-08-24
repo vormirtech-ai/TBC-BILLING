@@ -17,15 +17,16 @@
 export const APP = {
   name: 'The Baruch Cafe POS',
   shortName: 'TBC POS',
-  version: '2.0.0',
+  version: '3.0.0',
   /** Bump this only if the local database schema changes. */
   dbName: 'tbc-pos',
   /**
-   * 2 added the stock, staff, table and QR-ordering stores. The upgrade only
-   * creates stores that are missing, so a till already holding sales keeps
-   * every bill it has when it moves up from version 1.
+   * 2 added the stock, staff, table and QR-ordering stores. 3 added the sync
+   * outbox and relaxed the bill-number index. The upgrade only creates stores
+   * that are missing, so a till already holding sales keeps every bill it has
+   * however far back it is coming from.
    */
-  dbVersion: 2,
+  dbVersion: 3,
 };
 
 /** Accounts created the first time the app runs on a device. */

@@ -21,6 +21,8 @@ import {
 } from '../db/database.js';
 import { requireAdmin, requireSignedIn } from '../core/session.js';
 import { AppError, uid, pad, matchesQuery } from '../core/utils.js';
+import { deviceTag } from '../core/device.js';
+import { enqueueForSync } from '../db/database.js';
 import { applySaleToStock } from './inventory.repo.js';
 
 const COUNTER_KEY = 'orderNo';
@@ -80,6 +82,17 @@ function formatOrderNo(seq, prefix = 'ORD-', padding = 6) {
   return `${prefix}${pad(seq, padding)}`;
 }
 
+/**
+ * A bill number for a till that could not reach the shared database.
+ *
+ * The device's own tag goes on the end. Two tills billing through a network
+ * outage would otherwise both reach for the same number, and a duplicate bill
+ * number is the kind of thing an accountant finds three months later.
+ */
+function formatLocalOrderNo(seq, prefix, padding) {
+  return `${formatOrderNo(seq, prefix, padding)}-${deviceTag()}`;
+}
+
 /** Next unused business-day number, inside an open transaction. */
 function nextDayNumber(daysStore, startNumber) {
   return new Promise((resolve, reject) => {
@@ -97,7 +110,7 @@ function nextDayNumber(daysStore, startNumber) {
  *
  * @param {object} draft  fully-priced order (see order.service.js)
  * @param {{orderPrefix:string, orderNumberPadding:number, businessDayStartNumber:number,
- *          trackStock?:boolean}} options
+ *          trackStock?:boolean, allocateNumber?:() => Promise<number|null>}} options
  * @returns {Promise<object>} the saved transaction, with orderNo, dayNumber and
  *   any stock shortages the sale ran into
  */
@@ -109,6 +122,18 @@ export async function commitTransaction(draft, options) {
   }
   if (!Number.isInteger(draft.grandTotal) || draft.grandTotal < 0) {
     throw new AppError('The bill total is not valid. Clear the order and try again.', 'BAD_TOTAL');
+  }
+
+  // Ask the shared database for the bill number BEFORE opening storage: a
+  // storage transaction closes the moment it waits on anything that is not
+  // storage, and a network call is very much not storage.
+  let allocated = null;
+  if (typeof options.allocateNumber === 'function') {
+    try {
+      allocated = await options.allocateNumber();
+    } catch (error) {
+      console.error('[TBC POS] could not get a shared bill number', error);
+    }
   }
 
   // Stock moves in the same transaction as the sale, so a bill can never be
@@ -126,10 +151,19 @@ export async function commitTransaction(draft, options) {
       const transactions = stores[STORES.TRANSACTIONS];
       const days = stores[STORES.BUSINESS_DAYS];
 
-      // 1. Allocate the next order number.
+      // 1. Settle on the order number.
       const counter = (await promisify(counters.get(COUNTER_KEY))) || { key: COUNTER_KEY, value: 0 };
-      const seq = Number(counter.value || 0) + 1;
-      counters.put({ key: COUNTER_KEY, value: seq, updatedAt: new Date().toISOString() });
+      const localSeq = Number(counter.value || 0) + 1;
+      const shared = Number.isSafeInteger(allocated) && allocated > 0;
+      const seq = shared ? allocated : localSeq;
+
+      // Keep the local counter at or ahead of whatever was used, so falling
+      // back offline later cannot reuse a number the cafe has already issued.
+      counters.put({
+        key: COUNTER_KEY,
+        value: Math.max(Number(counter.value || 0), seq),
+        updatedAt: new Date().toISOString(),
+      });
 
       // 2. Find or open the business day.
       let day = await promisify(days.get(draft.businessDate));
@@ -152,7 +186,12 @@ export async function commitTransaction(draft, options) {
         ...draft,
         id: draft.id || uid('txn'),
         seq,
-        orderNo: formatOrderNo(seq, options.orderPrefix, options.orderNumberPadding),
+        orderNo: shared
+          ? formatOrderNo(seq, options.orderPrefix, options.orderNumberPadding)
+          : options.sharedNumbering
+          ? formatLocalOrderNo(seq, options.orderPrefix, options.orderNumberPadding)
+          : formatOrderNo(seq, options.orderPrefix, options.orderNumberPadding),
+        numberSource: shared ? 'SHARED' : 'DEVICE',
         dayNumber: day.dayNumber,
         cashier: draft.cashier || session.username,
         cashierRole: session.role,
@@ -172,14 +211,37 @@ export async function commitTransaction(draft, options) {
       });
 
       // 5. Draw down the ingredients this sale used.
-      let stock = { deducted: 0, shortages: [] };
+      let stock = { deducted: 0, shortages: [], touched: { inventory: [], movements: [] } };
       if (options.trackStock) stock = await applySaleToStock(stores, record, -1);
 
       // The shortages ride along for the counter to show; they are not part of
       // the stored bill.
-      return { ...record, stockShortages: stock.shortages };
+      return { ...record, stockShortages: stock.shortages, stockTouched: stock.touched };
     }
-  );
+  ).then(async (saved) => {
+    // The sale is committed. Queue everything it wrote for the shared database.
+    // This runs after the transaction rather than inside it because the queue
+    // for the raw-store writes above cannot be added from within them; the
+    // start-up sweep catches anything a crash lands between the two.
+    await queueSaleForSync(saved);
+    return saved;
+  });
+}
+
+/** Queue a committed sale, its day, and the stock it moved. */
+async function queueSaleForSync(record) {
+  try {
+    await enqueueForSync(STORES.TRANSACTIONS, record.id);
+    await enqueueForSync(STORES.BUSINESS_DAYS, record.businessDate);
+    for (const id of record.stockTouched?.inventory || []) {
+      await enqueueForSync(STORES.INVENTORY, id);
+    }
+    for (const id of record.stockTouched?.movements || []) {
+      await enqueueForSync(STORES.STOCK_MOVEMENTS, id);
+    }
+  } catch (error) {
+    console.error('[TBC POS] the sale was saved but could not be queued for sharing', error);
+  }
 }
 
 /**
@@ -227,11 +289,15 @@ export async function voidTransaction(id, reason, { trackStock = false } = {}) {
       }
 
       // A voided bill was never sold, so its ingredients go back on the shelf.
-      if (trackStock) await applySaleToStock(stores, voided, 1);
+      let stock = { touched: { inventory: [], movements: [] } };
+      if (trackStock) stock = await applySaleToStock(stores, voided, 1);
 
-      return voided;
+      return { ...voided, stockTouched: stock.touched };
     }
-  );
+  ).then(async (voided) => {
+    await queueSaleForSync(voided);
+    return voided;
+  });
 }
 
 export async function currentCounter() {

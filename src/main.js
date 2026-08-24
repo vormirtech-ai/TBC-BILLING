@@ -33,7 +33,8 @@ import { loadStaff } from './repositories/staff.repo.js';
 import { loadTables } from './repositories/tables.repo.js';
 import { pruneFinishedOrders } from './repositories/onlineOrders.repo.js';
 import { restoreDraft } from './services/cart.service.js';
-import { startOrderSync, stopOrderSync } from './services/orderChannel.service.js';
+import { bootstrap, startSync, stopSync } from './services/sync.service.js';
+import { isCloudEnabled, cloudConfig } from './services/cloudSync.service.js';
 import { mountShell } from './ui/shell.js';
 import { toast } from './ui/toast.js';
 
@@ -48,6 +49,8 @@ import { renderStaff } from './views/staff.view.js';
 import { renderTables } from './views/tables.view.js';
 import { renderOrders } from './views/orders.view.js';
 import { renderCustomerOrder } from './views/customer.view.js';
+import { renderSetup } from './views/setup.view.js';
+import { renderJoin } from './views/join.view.js';
 
 const shellHost = document.getElementById('shell');
 const bootScreen = document.getElementById('boot');
@@ -70,9 +73,13 @@ function fatal(message, detail) {
   );
 }
 
-/** The customer menu stands alone: no nav, no day chip, no sign-out. */
+/**
+ * Screens that stand alone: no nav, no day chip, no sign-out. The customer menu,
+ * and the pairing screen a device sees before anyone can sign in on it.
+ */
 function isCustomerRoute() {
-  return parseHash().path === '/order';
+  const { path } = parseHash();
+  return path === '/order' || path === '/join';
 }
 
 function refreshShell() {
@@ -87,13 +94,12 @@ function refreshShell() {
 }
 
 /**
- * Orders only need collecting while somebody is signed in to act on them.
- * A customer's phone should not sit polling a backend it cannot use.
+ * The sync loop runs while somebody is signed in and working. A customer's
+ * phone syncs on demand instead — it has one order to care about, not a cafe.
  */
-function refreshOrderSync() {
-  const session = getSession();
-  if (session && getSettings().qrOrderingEnabled) startOrderSync();
-  else stopOrderSync();
+function refreshSync() {
+  if (getSession() && isCloudEnabled()) startSync();
+  else stopSync();
 }
 
 async function boot() {
@@ -107,8 +113,20 @@ async function boot() {
     return;
   }
 
+  let joinedExisting = false;
+
   try {
     await loadSettings();
+
+    // A device connected to the cafe database takes what is already there
+    // BEFORE seeding anything of its own. Get this the wrong way round and a
+    // manager's laptop invents its own admin account and a second copy of the
+    // menu — which is exactly the "my data is not here" problem.
+    if (isCloudEnabled()) {
+      const result = await bootstrap();
+      joinedExisting = Boolean(result.ok);
+    }
+
     const [menuResult, userResult] = await Promise.all([seedMenuIfEmpty(), seedUsersIfEmpty()]);
 
     // Caches the screens read synchronously while painting.
@@ -118,7 +136,7 @@ async function boot() {
     refreshShell();
     onSessionChange(() => {
       refreshShell();
-      refreshOrderSync();
+      refreshSync();
     });
     document.addEventListener('route:changed', refreshShell);
 
@@ -126,6 +144,8 @@ async function boot() {
 
     defineRoute('/login', { render: renderLogin, public: true });
     defineRoute('/order', { render: renderCustomerOrder, public: true });
+    // Pairing a second device happens before anyone can sign in on it.
+    defineRoute('/join', { render: renderJoin, public: true });
     defineRoute('/pos', { render: renderPos });
     defineRoute('/orders', { render: renderOrders });
     defineRoute('/tables', { render: renderTables });
@@ -135,6 +155,7 @@ async function boot() {
     defineRoute('/staff', { render: renderStaff, role: ROLES.ADMIN });
     defineRoute('/menu', { render: renderMenuAdmin, role: ROLES.ADMIN });
     defineRoute('/settings', { render: renderSettings, role: ROLES.ADMIN });
+    defineRoute('/setup', { render: renderSetup, role: ROLES.ADMIN });
 
     setNotFound(({ outlet }) => {
       clear(outlet).appendChild(
@@ -184,6 +205,13 @@ async function boot() {
     // Everything past this point is for staff. A customer's phone stops here.
     if (isCustomerRoute()) return;
 
+    if (joinedExisting) {
+      toast.success('Connected to the cafe database.');
+    } else if (!cloudConfig().configured) {
+      // The single most common reason for "my data is not on my other device".
+      toast.warn('This device is storing data on its own. Open Settings → Set up the cafe database to share it.');
+    }
+
     if (menuResult.seeded) {
       toast.info(`Menu loaded with ${menuResult.count} items.`);
     }
@@ -200,7 +228,7 @@ async function boot() {
       toast.info('An unpaid order was still open at the counter.');
     }
 
-    refreshOrderSync();
+    refreshSync();
 
     // Old accepted and rejected orders are clutter; the bill is the record that
     // matters. Failure here is harmless, so it never blocks the counter.

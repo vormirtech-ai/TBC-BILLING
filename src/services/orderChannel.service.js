@@ -1,50 +1,37 @@
 /**
  * Getting an order from a customer's phone to the counter.
  *
- * There are three routes, and the app uses whichever ones are available:
+ * With the cafe database connected — which is how this is meant to run — an
+ * order is simply another record: the phone writes it, sync carries it, and it
+ * appears at the counter within seconds without anybody scanning anything.
  *
- *   1. SAME BROWSER — a BroadcastChannel, with a localStorage ping as a
- *      fallback for browsers that lack one. Instant, and covers a counter
- *      tablet where the customer menu is open in another tab.
+ * Two other routes exist for when it is not:
  *
- *   2. HANDOFF CODE — the order is squeezed into a short string shown as a QR
- *      code and as four-character text. The counter scans or types it and the
- *      order lands in the till. No server, no network, works between any two
- *      devices in the room. This is the default answer for a static site.
+ *   SAME BROWSER — a BroadcastChannel, with a localStorage ping behind it, so a
+ *   counter tablet with the customer menu open in another tab sees the order at
+ *   once.
  *
- *   3. SHARED BACKEND — if the cafe has filled in the cloud settings, orders
- *      travel by themselves and the counter polls for new ones.
+ *   HANDOFF CODE — the order squeezed into a short string, shown as a QR code
+ *   and four readable characters, which the counter scans or types. It needs no
+ *   network whatsoever, so it is what the app falls back to rather than losing
+ *   somebody's order.
  *
  * A handoff code carries item CODES, not prices. The counter prices the order
  * from its own menu, so a stale price on a customer's phone can never decide
  * what is charged.
  */
 
-import { AppError, uid } from '../core/utils.js';
+import { AppError } from '../core/utils.js';
 import { ONLINE_ORDER_STATUS } from '../config/app.config.js';
+import { deviceId } from '../core/device.js';
 import * as ordersRepo from '../repositories/onlineOrders.repo.js';
 import * as cloud from './cloudSync.service.js';
+import { syncNow, pushPending } from './sync.service.js';
 
 const CHANNEL_NAME = 'tbc.orders';
 const PING_KEY = 'tbc.orders.ping';
-const DEVICE_KEY = 'tbc.device';
-const CURSOR_KEY = 'tbc.orders.cursor';
 
-/* -------------------------------------------------------------- device --- */
-
-/** A stable id for this browser, so a phone can follow its own orders. */
-export function deviceId() {
-  try {
-    let id = localStorage.getItem(DEVICE_KEY);
-    if (!id) {
-      id = uid('dev');
-      localStorage.setItem(DEVICE_KEY, id);
-    }
-    return id;
-  } catch {
-    return 'dev_unknown';
-  }
-}
+export { deviceId };
 
 /* ------------------------------------------------------- local channel --- */
 
@@ -118,91 +105,42 @@ export function subscribeOrders(handler) {
   };
 }
 
-/* --------------------------------------------------------- cloud polling --- */
-
-let pollTimer = null;
-
-function readCursor() {
-  try {
-    return localStorage.getItem(CURSOR_KEY) || '';
-  } catch {
-    return '';
-  }
-}
-
-function writeCursor(value) {
-  try {
-    localStorage.setItem(CURSOR_KEY, value);
-  } catch {
-    /* ignore */
-  }
-}
+/* ----------------------------------------------------- shared database --- */
 
 /**
- * Pull anything new from the shared backend into this device's queue.
- * Safe to call at any time; does nothing when cloud sync is off.
+ * Orders travel on the shared database like every other record, so there is no
+ * separate poller here any more — sync.service brings them in and the queue
+ * repaints from the repository's own change event.
+ *
+ * This remains as the "check right now" the Refresh button calls.
  */
 export async function pullRemoteOrders() {
   if (!cloud.isCloudEnabled()) return 0;
-
-  const since = readCursor();
-  const incoming = await cloud.pullOrders(since);
-  if (!incoming.length) return 0;
-
-  let received = 0;
-  let newest = since;
-
-  for (const order of incoming) {
-    if (order?.deviceId === deviceId()) continue; // came from here
-    try {
-      const stored = await ordersRepo.receiveOrder(order);
-      if (stored) received += 1;
-    } catch (error) {
-      console.error('[TBC POS] ignored a malformed order from the shared backend', error);
-    }
-    const stamp = order?.placedAt || '';
-    if (stamp > newest) newest = stamp;
-  }
-
-  if (newest && newest !== since) writeCursor(newest);
-  return received;
+  const result = await syncNow();
+  return result?.orders || 0;
 }
 
-/** Start polling the shared backend. Returns a function that stops it. */
+/** Kept for callers that used to start a poller of their own. */
 export function startOrderSync() {
-  stopOrderSync();
-  if (!cloud.isCloudEnabled()) return () => {};
-
-  const { pollSeconds } = cloud.cloudConfig();
-  const tick = async () => {
-    try {
-      const received = await pullRemoteOrders();
-      if (received) ordersRepo.announceOrders();
-    } catch (error) {
-      console.error('[TBC POS] order sync failed', error);
-    }
-  };
-
-  tick();
-  pollTimer = setInterval(tick, pollSeconds * 1000);
-  return stopOrderSync;
+  return () => {};
 }
 
-export function stopOrderSync() {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-}
+export function stopOrderSync() {}
 
 /* --------------------------------------------------------------- send --- */
 
-/** Place an order and push it out by every route available. */
+/**
+ * Place an order and get it to the counter.
+ *
+ * The order is stored first, so it exists even if the phone loses signal on the
+ * next step, and then pushed straight away rather than waiting for the next
+ * sync tick — a customer watching a spinner should not be waiting on a timer.
+ */
 export async function sendOrder(draft) {
   const order = await ordersRepo.placeOrder({ ...draft, deviceId: deviceId() });
 
   broadcast({ type: 'order', order, from: deviceId() });
-  await cloud.pushOrder(order);
+  if (cloud.isCloudEnabled()) await pushPending();
 
   return order;
 }
@@ -210,7 +148,7 @@ export async function sendOrder(draft) {
 /** Tell everyone an order was accepted, rejected or billed. */
 export async function announceStatus(order) {
   broadcast({ type: 'status', order, from: deviceId() });
-  await cloud.pushOrderStatus(order);
+  if (cloud.isCloudEnabled()) await pushPending();
   return order;
 }
 
@@ -289,10 +227,14 @@ export function decodeHandoff(text) {
   };
 }
 
-/** How an order should be described to the customer once it is placed. */
+/**
+ * How an order reaches the counter, which decides what the customer is told.
+ *
+ * CLOUD    — it goes by itself, and the phone can follow what happens to it.
+ * HANDOFF  — there is no shared database, so the phone shows a code instead.
+ */
 export function deliveryRoute() {
-  if (cloud.isCloudEnabled()) return 'CLOUD';
-  return 'HANDOFF';
+  return cloud.isCloudEnabled() ? 'CLOUD' : 'HANDOFF';
 }
 
 export { ONLINE_ORDER_STATUS };

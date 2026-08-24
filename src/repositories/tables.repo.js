@@ -137,6 +137,35 @@ export function siteBaseUrl() {
 }
 
 /**
+ * The connection a scanned phone needs, packed for a URL.
+ *
+ * A customer's phone has never seen this cafe and has no way to reach its
+ * database unless the table card tells it how, so the card carries the address
+ * and the public key. That key is public by design — every Supabase web app
+ * ships it in its own JavaScript — and putting it on a printed card keeps it to
+ * people standing in the cafe rather than on the open web.
+ *
+ * It is also why the app never lets a signed-out device write anything except
+ * the order it just placed.
+ */
+function connectionParam() {
+  const settings = getSettings();
+  if (!settings.cloudSyncEnabled || !settings.cloudSyncUrl || !settings.cloudSyncKey) return null;
+
+  return btoa(
+    JSON.stringify({
+      v: 1,
+      url: settings.cloudSyncUrl,
+      key: settings.cloudSyncKey,
+      table: settings.cloudSyncTable || 'tbc_sync',
+    })
+  )
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/**
  * The full link a customer's phone opens when it scans this table's code.
  *
  * The token identifies the table; the name rides along purely so the phone can
@@ -145,7 +174,14 @@ export function siteBaseUrl() {
  */
 export function tableOrderUrl(table) {
   const params = new URLSearchParams({ t: table.token, n: table.name });
+  const connection = connectionParam();
+  if (connection) params.set('c', connection);
   return `${siteBaseUrl()}#/order?${params.toString()}`;
+}
+
+/** Whether table codes currently carry the cafe connection. */
+export function tableCodesCarryConnection() {
+  return connectionParam() !== null;
 }
 
 /* -------------------------------------------------------------- writes --- */
