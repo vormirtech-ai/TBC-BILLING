@@ -937,20 +937,28 @@ export function renderPos({ outlet }) {
     if (!customer || settings.loyaltyEnabled === false) return;
 
     const name = customer.name || customersRepo.formatPhone(customer.phone);
+    const treat = (settings.loyaltyRewardLabel || 'free coffee').toLowerCase();
     const progress = loyalty.streakProgress(customer, { today: today(), tradingDays, settings });
     if (!progress.length) return;
 
+    // A treat given on this very bill: say where they are, not what they are
+    // still owed, because they have just been given it.
+    if (txn.rewardAmount) {
+      toast.info(`${name} is on ${progress.length} days in a row. The ${treat} was on this bill.`);
+      return;
+    }
+
     if (progress.toGo === 0) {
       toast.success(
-        `${name} is on ${progress.length} days in a row — a ${(
-          settings.loyaltyRewardLabel || 'free coffee'
-        ).toLowerCase()} is waiting on the next visit.`
+        `${name} is on ${progress.credit} days in a row — a ${treat} is waiting on the next visit.`
       );
     } else {
+      // Counted from the last treat given, so the two numbers agree with each
+      // other rather than describing two different streaks.
       toast.info(
-        `${name}: ${progress.length} day${progress.length === 1 ? '' : 's'} in a row, ${
+        `${name}: ${progress.credit} day${progress.credit === 1 ? '' : 's'} in a row, ${
           progress.toGo
-        } more for a ${(settings.loyaltyRewardLabel || 'free coffee').toLowerCase()}.`
+        } more for a ${treat}.`
       );
     }
   }
