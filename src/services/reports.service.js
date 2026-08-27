@@ -19,6 +19,7 @@ export function summarise(transactions) {
     itemCount,
     averageOrder: live.length ? Math.round(totalSales / live.length) : 0,
     discountTotal: sum(live, (t) => t.discountAmount),
+    rewardTotal: sum(live, (t) => t.rewardAmount || 0),
     taxTotal: sum(live, (t) => t.taxAmount),
   };
 }

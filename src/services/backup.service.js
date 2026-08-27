@@ -18,15 +18,16 @@ import * as inventoryRepo from '../repositories/inventory.repo.js';
 import * as staffRepo from '../repositories/staff.repo.js';
 import * as tablesRepo from '../repositories/tables.repo.js';
 import * as ordersRepo from '../repositories/onlineOrders.repo.js';
+import * as customersRepo from '../repositories/customers.repo.js';
 import { getSettings, replaceSettings, loadSettings } from '../repositories/settings.repo.js';
 
 const FORMAT = 'tbc-pos-backup';
 /**
- * 2 added stock, staff, tables and QR orders. Version 1 files still restore —
- * their missing sections simply come back empty, which is exactly what a till
- * that never had stock should get.
+ * 2 added stock, staff, tables and QR orders; 3 added the customer book.
+ * Version 1 and 2 files still restore — their missing sections simply come back
+ * empty, which is exactly what a till that never had stock should get.
  */
-const FORMAT_VERSION = 2;
+const FORMAT_VERSION = 3;
 
 export async function buildBackup() {
   const [
@@ -43,6 +44,7 @@ export async function buildBackup() {
     attendance,
     tables,
     onlineOrders,
+    customers,
   ] = await Promise.all([
     getAll(STORES.MENU),
     getAll(STORES.TRANSACTIONS),
@@ -57,6 +59,7 @@ export async function buildBackup() {
     getAll(STORES.ATTENDANCE),
     getAll(STORES.TABLES),
     getAll(STORES.ONLINE_ORDERS),
+    getAll(STORES.CUSTOMERS),
   ]);
 
   return {
@@ -72,6 +75,7 @@ export async function buildBackup() {
       inventory: inventory.length,
       staff: staff.length,
       tables: tables.length,
+      customers: customers.length,
     },
     data: {
       settings: getSettings(),
@@ -88,6 +92,7 @@ export async function buildBackup() {
       attendance,
       tables,
       onlineOrders,
+      customers,
     },
   };
 }
@@ -148,6 +153,7 @@ export async function inspectBackup(file) {
       inventory: (data.inventory || []).length,
       staff: (data.staff || []).length,
       tables: (data.tables || []).length,
+      customers: (data.customers || []).length,
     },
     range: dates.length ? { from: dates[0], to: dates[dates.length - 1] } : null,
     data,
@@ -183,6 +189,7 @@ export async function restoreBackup(inspected) {
     attendance,
     tables,
     onlineOrders,
+    customers,
   } = inspected.data;
 
   if (settings) await replaceSettings(settings);
@@ -201,6 +208,7 @@ export async function restoreBackup(inspected) {
   await staffRepo.replaceAll(staff, shifts, attendance);
   await tablesRepo.replaceAll(tables);
   await ordersRepo.replaceAll(onlineOrders);
+  await customersRepo.replaceAll(customers);
 
   await loadSettings();
   await menuRepo.loadMenu();

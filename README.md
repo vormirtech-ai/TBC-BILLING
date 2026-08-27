@@ -25,17 +25,19 @@ app tells you so in the top bar.
 6. [Sign-in accounts](#sign-in-accounts)
 7. [The menu](#the-menu)
 8. [Tables and QR ordering](#tables-and-qr-ordering)
-9. [The cafe database](#the-cafe-database)
-10. [Stock](#stock)
-11. [Staff, attendance and the rota](#staff-attendance-and-the-rota)
-12. [Where the data lives](#where-the-data-lives)
-13. [Excel export](#excel-export)
-14. [Backup and restore](#backup-and-restore)
-15. [What static hosting means](#what-running-on-a-static-host-does-and-does-not-mean)
-16. [Moving to a real backend later](#moving-to-a-real-backend-later)
-17. [Project layout](#project-layout)
-18. [Automated tests](#automated-tests)
-19. [Testing checklist](#testing-checklist)
+9. [Orders: the board](#orders-the-board)
+10. [Regulars: streaks and birthdays](#regulars-streaks-and-birthdays)
+11. [The cafe database](#the-cafe-database)
+12. [Stock](#stock)
+13. [Staff, attendance and the rota](#staff-attendance-and-the-rota)
+14. [Where the data lives](#where-the-data-lives)
+15. [Excel export](#excel-export)
+16. [Backup and restore](#backup-and-restore)
+17. [What static hosting means](#what-running-on-a-static-host-does-and-does-not-mean)
+18. [Moving to a real backend later](#moving-to-a-real-backend-later)
+19. [Project layout](#project-layout)
+20. [Automated tests](#automated-tests)
+21. [Testing checklist](#testing-checklist)
 
 ---
 
@@ -54,6 +56,10 @@ app tells you so in the top bar.
 - An unpaid order survives a refresh, a crash or a closed lid.
 - Seat an order at a table, and take orders that customers sent in from a table
   QR code — one tap turns a request into a bill.
+- Send an order to the kitchen without taking payment, and get the till back for
+  the next customer. It waits on the order board until the table asks to pay.
+- Attach a regular by phone number. The counter then says where they stand —
+  "4 days in a row" — and offers their free coffee when one is due.
 
 **For the customer**
 
@@ -62,6 +68,8 @@ app tells you so in the top bar.
 - The counter's Orders button turns red and chimes the moment it arrives.
 - Nothing is charged on the phone. An order is a request; staff confirm it and
   payment happens as usual.
+- They can leave their phone number, which is what keeps their visits counted
+  towards a free coffee.
 
 **Across devices**
 
@@ -91,6 +99,8 @@ app tells you so in the top bar.
   ingredients so a sale takes them off the shelf by itself.
 - Staff: attendance with clock-in and clock-out, an editable week rota, and
   hours totalled for payroll.
+- Customers: who the regulars are, how often they come, whose birthday is
+  coming up, who is owed a free coffee, and who has not been in for a month.
 - Excel export per business day, per date range, everything, plus stock and
   attendance.
 - Backup and restore as a JSON file.
@@ -351,6 +361,118 @@ counter prices every order from its own menu when it is billed.**
 
 ---
 
+## Orders: the board
+
+The **Orders** screen is every order the cafe has agreed to make and has not yet
+been paid for, whichever way it arrived.
+
+An order gets on the board in one of two ways:
+
+- **From the counter.** Ring the order up as usual and press **Send to
+  kitchen** instead of taking payment. The till is handed back empty for the
+  next customer, and the order waits on the board.
+- **From a table's QR code.** It lands as *waiting to be accepted*, because
+  nobody has agreed to make it yet, and the Orders button turns red.
+
+From there it moves one tap at a time:
+
+| State | What it means | What the buttons offer |
+| --- | --- | --- |
+| **Waiting** | A customer asked; staff have not agreed yet | Turn down · Start making · Accept and bill |
+| **Being made** | In the kitchen | Cancel · Take payment · Mark ready |
+| **Ready** | Made, waiting to go out | Back to making · Take payment · Mark served |
+| **Served** | On the table, not paid for | Back to ready · Take payment |
+| **Billed** | Paid for; the bill is now the record | — |
+
+Every card shows how long it has been waiting, which is the number that matters
+when the room is full. **Take payment** brings the order back to the counter,
+priced from this device's menu, ready to pay for. Recall an order, change it and
+press **Update the order** and it goes back to the board as the same order —
+never as a second copy of somebody's coffee.
+
+Nothing on the board is money. A bill is only created when payment is taken, so
+an order that is cancelled leaves the day's takings untouched.
+
+---
+
+## Regulars: streaks and birthdays
+
+The cafe can keep a book of its regulars, count how often each one comes in, and
+give a coffee away for a streak or a birthday. It is off nobody's radar: the
+whole thing is three settings and one button at the counter.
+
+### At the counter
+
+Press **Attach a customer**, type a phone number, and either pick the person who
+comes up or fill in the two fields to add them. The button then shows where they
+stand — *"Riya Menon · 4-day streak"* — and the visit is recorded when the bill
+is taken.
+
+The phone number is the customer's identity, on purpose: it is the one thing a
+cashier can ask for across a counter, and it is what the record is keyed on, so
+two tills that both meet the same new customer while offline write **one**
+record rather than two half-complete ones.
+
+### What earns a free coffee
+
+- **A streak.** Coming in on a number of trading days in a row — five by
+  default. **Days the cafe was shut do not break a streak**, because the count
+  runs over the days the cafe actually traded, not the calendar. Today is never
+  held against anybody either: a regular on four days who has not been in yet
+  this morning is still on four days.
+- **A birthday.** Once a year, on the day, or within a window either side of it
+  if the cafe would rather say "come in this week".
+
+When something is due, a strip appears above the totals — *"Free coffee due · 5
+days in a row"* — with one button. Pressing it makes the dearest qualifying
+drink on the order free. It comes off before any discount, so a customer never
+ends up paying a discounted price for something they were told was free, and it
+is printed on the bill by name.
+
+Each treat is written on the customer's record when it is given, so it cannot be
+given twice: a birthday coffee is once per year, and a streak starts again from
+the next visit.
+
+### Settings
+
+**Settings → Regulars and treats**:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Keep a customer book | On | Turns the whole feature, and the Customers screen, on or off |
+| Give a free item | On | Keep the book without giving anything away by turning this off |
+| Days in a row | 5 | How long a streak has to be |
+| A free item on a birthday | On | |
+| Days either side of a birthday | 0 | 0 is the day itself; 3 makes it a birthday week |
+| What the treat is called | Free coffee | Shown at the counter and printed on the bill |
+| Categories it may come from | Hot, Iced, Cold Brews, Frappe's | Blank allows anything on the menu |
+| Most it may be worth | — | Blank means whatever the item costs |
+
+### The Customers screen
+
+The book, with the filters a manager actually uses at the start of a shift:
+everyone, **free coffee due**, **on a streak**, **birthday this week**, and **not
+seen lately** — the regular who has stopped coming, which is worth knowing
+before they are gone for good. Opening a customer shows their visits, what they
+have spent, their streak, their birthday and how many treats they have had.
+
+### From a customer's phone
+
+A customer ordering from a table QR code can leave their number. When the
+counter accepts that order, the number is matched to the book — or added to it —
+so the visit lands on their record without anybody typing anything.
+
+### Visits across devices
+
+Visit history is the one thing in this app that is **merged rather than
+overwritten**. Everything else is last-write-wins, which is right for a menu
+price and wrong for a visit: two tills serving the same regular on the same day
+would each hold a day the other did not, and whoever wrote last would erase it.
+Days are folded together instead, and the fuller picture is sent back up, so a
+device joining next week still inherits the whole history.
+
+---
+
 ## The cafe database
 
 **This is the part that makes it a cafe system rather than a till with a good
@@ -491,16 +613,18 @@ is eight hours, not a negative day.
 ## Where the data lives
 
 Every device keeps a full copy in **IndexedDB in its own browser**, across
-fifteen stores: menu items, transactions, business days, settings, counters,
+sixteen stores: menu items, transactions, business days, settings, counters,
 users, inventory, stock movements, recipes, staff, shifts, attendance, tables,
-online orders, and the outbox of changes still to be shared.
+orders, customers, and the outbox of changes still to be shared.
 
 **That local copy is the working set, not the master.** Writes go there first so
 the counter never waits on a network, and each one queues in the outbox in the
 same storage transaction — a bill and the reminder to send it cannot come apart.
 A loop then pushes the queue up and pulls back everything changed elsewhere.
 Where two devices disagree, the last write wins, judged by the database's clock
-rather than either device's.
+rather than either device's — with one deliberate exception: a customer's visit
+history is merged rather than replaced, so no till can erase a visit another one
+recorded.
 
 **Upgrading from an older version.** A till already holding sales keeps every
 one of them. The upgrade only creates the stores that are missing, quietly gives
@@ -671,20 +795,23 @@ src/
     xlsx.js                 ZIP + OOXML writer
     qrcode.js               QR encoder — no dependencies, works offline
   repositories/             menu, transactions, business days, settings, users,
-                            inventory, staff, tables, online orders
+                            inventory, staff, tables, orders, customers
   services/                 pricing, cart, orders, auth, export, backup, reports,
                             order channel, published menu
+    loyalty.service.js      streaks, birthdays, and what a free coffee is worth
     cloudSync.service.js    speaks to the shared database over plain fetch
     sync.service.js         push, pull, outbox, and who wins a disagreement
   ui/                       shell, modals, toasts, receipt
   views/                    login, pos, dashboard, history, menu, settings,
-                            tables, orders, inventory, staff, customer,
+                            tables, orders (the board), inventory, staff,
+                            customers (the book), customer (a diner's phone),
                             setup (connect the database), join (pair a device)
 
 tests/
   run.mjs                   runs everything below
   pricing.test.mjs          66 assertions on the money maths
   cafe.test.mjs             78 on quantities, shifts, handoff codes, menu codes
+  loyalty.test.mjs          61 on streaks, birthdays and free-item pricing
   qrcode.test.mjs           138 round-tripping QR codes through a decoder
 ```
 
@@ -698,7 +825,7 @@ No dependencies, no install, no test runner to configure:
 node tests/run.mjs
 ```
 
-282 assertions across three files.
+343 assertions across four files.
 
 **`pricing.test.mjs` — 66.** The one part of this app where a bug costs real
 money: integer-paise arithmetic, discount distribution (the parts always sum to
@@ -712,11 +839,22 @@ midnight), the handoff code that carries an order between two devices — provin
 a mistyped one is refused and that no price ever travels in it — and the stable
 menu codes two devices use to agree on what an item is.
 
+**`loyalty.test.mjs` — 61.** Phone numbers written every way an Indian customer
+writes them resolving to one person; birthdays parsed, including 29 February and
+the ones that fall the wrong side of New Year; streaks counted over trading days,
+so a day the cafe was shut does not break one and today is not held against
+anybody; treats given once and only once; and the free item on a bill — that it
+comes off in full, that a percentage discount cannot be taken from it, that it
+can never be worth more than the item it sits on, and that the lines still add up
+to the total exactly.
+
 Cross-device behaviour cannot be tested this way — it needs two browsers and a
 database — so it is covered by driving the real app against a stand-in for
 PostgREST: a bill made on one device appearing on another, one login working on
-a device that never had it, a QR order arriving on its own, and a bill taken with
-the network pulled out reaching the other device once it returns.
+a device that never had it, a QR order arriving on its own, a bill taken with the
+network pulled out reaching the other device once it returns, and two tills
+recording a visit for the same regular while offline — after which both of them,
+and a third device joining later, hold every one of those visits.
 
 **`qrcode.test.mjs` — 138.** The QR encoder, round-tripped through an
 independent decoder written into the test file: every correction level, every
@@ -760,20 +898,33 @@ Worth walking through after any change:
 19. **Rota** — add a shift, edit it, copy a day onto another day.
 20. **Attendance** — clock someone in and out, then correct the times and check
     the hours follow.
+21. **A customer** — attach a phone number at the counter, take the bill, and
+    check the visit shows on the Customers screen.
+22. **A birthday** — set a customer's birthday to today, attach them, and confirm
+    the free coffee is offered, comes off the total in full, and is printed on
+    the bill. Attach them again on a second order: it must not be offered twice.
+23. **A streak** — after five days in a row the strip should read "5 days in a
+    row". Give it, and confirm the count starts again from the next visit.
+24. **Send to kitchen** — ring an order up, send it, and check the till is handed
+    back empty and the order is on the board as *being made*.
+25. **The board** — move an order ready → served → **Take payment**, and confirm
+    it comes back to the counter with its items and reads *Billed* afterwards.
 
 With the cafe database connected:
 
-21. **Two devices** — connect the counter, pair a second device with the code,
+26. **Two devices** — connect the counter, pair a second device with the code,
     and check the top bar reads **Shared** on both.
-22. **A bill crosses over** — ring one up on the counter; it should appear in
+27. **A bill crosses over** — ring one up on the counter; it should appear in
     Bills on the other device within a few seconds.
-23. **One login everywhere** — change the admin password on one device and sign
+28. **One login everywhere** — change the admin password on one device and sign
     in with it on the other.
-24. **Bill numbers** — bill from both devices and confirm the numbers do not
+29. **Bill numbers** — bill from both devices and confirm the numbers do not
     collide.
-25. **A QR order arrives by itself** — order from a phone and watch the counter's
+30. **A QR order arrives by itself** — order from a phone and watch the counter's
     Orders button turn red without anybody scanning anything.
-26. **Pull the network out** — take a bill with wi-fi off (it should still go
+31. **A regular on both tills** — add a customer on one device and check they can
+    be found by phone number on the other.
+32. **Pull the network out** — take a bill with wi-fi off (it should still go
     through, numbered like `ORD-000042-K7`), then reconnect and confirm it
     reaches the other device.
 

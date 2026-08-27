@@ -29,6 +29,9 @@ export const STORES = {
   TABLES: 'tables',
   ONLINE_ORDERS: 'onlineOrders',
 
+  /** Regulars: who they are, when they came in, and what they have earned. */
+  CUSTOMERS: 'customers',
+
   /** Records waiting to be sent to the shared database. */
   SYNC_OUTBOX: 'syncOutbox',
 };
@@ -53,6 +56,7 @@ export const STORE_KEYS = {
   [STORES.ATTENDANCE]: 'id',
   [STORES.TABLES]: 'id',
   [STORES.ONLINE_ORDERS]: 'id',
+  [STORES.CUSTOMERS]: 'id',
 };
 
 export const SYNCED_STORES = Object.keys(STORE_KEYS);
@@ -177,6 +181,22 @@ function upgrade(db, transaction) {
     orders.createIndex('status', 'status', { unique: false });
     orders.createIndex('placedAt', 'placedAt', { unique: false });
     orders.createIndex('tableId', 'tableId', { unique: false });
+  }
+
+  /* ------------------------------------------------------- customers --- */
+
+  if (!db.objectStoreNames.contains(STORES.CUSTOMERS)) {
+    const customers = db.createObjectStore(STORES.CUSTOMERS, { keyPath: 'id' });
+    // Phone is how a cashier finds somebody, but the index is NOT unique: two
+    // tills that both took the same new customer while offline would otherwise
+    // be unable to store each other's copy. The repository merges duplicates
+    // instead, which loses nobody's visits.
+    customers.createIndex('phone', 'phone', { unique: false });
+    customers.createIndex('name', 'name', { unique: false });
+    // Birthdays are stored as MM-DD so "who is in today" is one index range
+    // rather than a scan of every customer the cafe has ever served.
+    customers.createIndex('birthday', 'birthday', { unique: false });
+    customers.createIndex('lastVisit', 'lastVisit', { unique: false });
   }
 
   /* ------------------------------------------------------------ sync --- */

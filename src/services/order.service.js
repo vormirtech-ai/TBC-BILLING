@@ -15,12 +15,64 @@ import { commitTransaction } from '../repositories/transactions.repo.js';
 import * as ordersRepo from '../repositories/onlineOrders.repo.js';
 import * as tablesRepo from '../repositories/tables.repo.js';
 import * as inventoryRepo from '../repositories/inventory.repo.js';
+import * as customersRepo from '../repositories/customers.repo.js';
 import { announceStatus } from './orderChannel.service.js';
 import { nextOrderNumber, isCloudEnabled } from './cloudSync.service.js';
 import * as cart from './cart.service.js';
 
 export function isValidPaymentMethod(method) {
   return PAYMENT_METHODS.some((entry) => entry.id === method);
+}
+
+/**
+ * Send what is on the counter to the kitchen and hand the till back empty.
+ *
+ * This is the other half of order management: an order does not have to be
+ * paid for the moment it is taken. It goes on the board, the next customer gets
+ * served, and it comes back to the counter when the table asks for the bill.
+ *
+ * An order recalled from the board and changed is updated in place rather than
+ * duplicated — the board must never show the same coffee twice.
+ *
+ * @returns {Promise<object>} the saved order
+ */
+export async function sendToKitchen() {
+  requireSignedIn();
+  const priced = cart.getCart();
+
+  if (!priced.lines.length) {
+    throw new AppError('Add something to the order before sending it to the kitchen.', 'EMPTY_CART');
+  }
+
+  const draft = {
+    lines: priced.lines.map((line) => ({
+      itemId: line.itemId,
+      code: line.itemId,
+      name: line.name,
+      category: line.category || '',
+      unitPrice: line.unitPrice,
+      quantity: line.quantity,
+      note: line.note || '',
+    })),
+    tableId: priced.tableId || '',
+    tableName: priced.tableName || '',
+    customerName: priced.customerName || '',
+    customerId: priced.customerId || '',
+    customerPhone: priced.customerPhone || '',
+    note: priced.note || '',
+  };
+
+  const order = priced.onlineOrderId
+    ? await ordersRepo.updateOrder(priced.onlineOrderId, draft)
+    : await ordersRepo.createCounterOrder(draft);
+
+  // A table with an order on it is not free, whatever it looked like before.
+  if (order.tableId) {
+    await tablesRepo.setStatus(order.tableId, TABLE_STATUS.ORDERED).catch(() => {});
+  }
+
+  cart.clearCart();
+  return order;
 }
 
 /**
@@ -66,6 +118,9 @@ export async function completeSale(payment) {
         : null,
 
     customerName: priced.customerName || '',
+    // The regular this bill belongs to, when one was looked up at the counter.
+    customerId: priced.customerId || '',
+    customerPhone: priced.customerPhone || '',
     note: priced.note || '',
 
     // Where the order came from, and which table it belongs to. Both are copied
@@ -85,12 +140,19 @@ export async function completeSale(payment) {
       lineTotal: line.lineTotal,
       discountAmount: line.discountAmount,
       taxRate: line.taxRate,
+      rewardAmount: line.rewardAmount || 0,
       taxableAmount: line.taxableAmount,
       taxAmount: line.taxAmount,
       total: line.total,
       note: line.note || '',
     })),
     subtotal: priced.subtotal,
+    // A loyalty treat, copied into the bill so a reprint still shows what was
+    // given away and why.
+    rewardAmount: priced.rewardAmount || 0,
+    rewardLabel: priced.rewardLabel || '',
+    rewardKind: priced.rewardKind || '',
+    rewardItemName: priced.rewardItemName || '',
     discountType: priced.discountType,
     discountValue: priced.discountValue,
     discountAmount: priced.discountAmount,
@@ -138,6 +200,23 @@ export async function completeSale(payment) {
     }
     if (draft.tableId) {
       await tablesRepo.setStatus(draft.tableId, TABLE_STATUS.FREE);
+    }
+
+    // Write the visit down. A voided bill leaves it standing on purpose: the
+    // customer did come in, whatever happened to the paperwork afterwards.
+    if (draft.customerId) {
+      await customersRepo.recordVisit({
+        id: draft.customerId,
+        businessDate: draft.businessDate,
+        amount: saved.grandTotal,
+        billId: saved.id,
+      });
+      if (priced.reward?.kind && saved.rewardAmount > 0) {
+        await customersRepo.markRewardClaimed(draft.customerId, {
+          kind: priced.reward.kind,
+          businessDate: draft.businessDate,
+        });
+      }
     }
   } catch (error) {
     console.error('[TBC POS] the sale was saved, but tidying up afterwards failed', error);

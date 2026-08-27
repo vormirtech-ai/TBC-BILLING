@@ -1,7 +1,7 @@
 /** Admin settings: cafe details, billing rules, users, backup, maintenance. */
 
 import { el, clear, formatDateTime } from '../core/utils.js';
-import { parsePercentToBasisPoints, formatRate } from '../core/money.js';
+import { parsePercentToBasisPoints, formatRate, parseRupeesToPaise } from '../core/money.js';
 import { getSettings, saveSettings } from '../repositories/settings.repo.js';
 import * as usersRepo from '../repositories/users.repo.js';
 import * as menuRepo from '../repositories/menu.repo.js';
@@ -509,6 +509,106 @@ export async function renderSettings({ outlet }) {
     ]),
   ]);
 
+  /* -------------------------------------------------- regulars and treats --- */
+
+  const customersEnabled = checkField(
+    'Keep a customer book',
+    settings.customerTrackingEnabled,
+    'Lets the counter attach a phone number to a bill and count that visit.'
+  );
+  const loyaltyEnabled = checkField(
+    'Give a free item for streaks and birthdays',
+    settings.loyaltyEnabled,
+    'Turn this off to keep the customer book without giving anything away.'
+  );
+  const streakDays = textField('Days in a row for a free item', settings.loyaltyStreakDays, {
+    inputmode: 'numeric',
+    hint: 'Days the cafe was shut do not break a streak.',
+  });
+  const birthdayEnabled = checkField(
+    'A free item on a birthday',
+    settings.loyaltyBirthdayEnabled,
+    'Once a year, on the day.'
+  );
+  const birthdayWindow = textField('Days either side of a birthday', settings.loyaltyBirthdayWindowDays, {
+    inputmode: 'numeric',
+    hint: '0 means on the day itself. 3 makes it a birthday week.',
+  });
+  const rewardLabel = textField('What the treat is called', settings.loyaltyRewardLabel, {
+    placeholder: 'Free coffee',
+    hint: 'Shown at the counter and printed on the bill.',
+  });
+  const rewardCategories = textField(
+    'Menu categories it may come from',
+    (settings.loyaltyRewardCategories || []).join(', '),
+    {
+      placeholder: 'Hot, Iced, Cold Brews',
+      hint: 'Comma separated. Leave blank to allow anything on the menu.',
+    }
+  );
+  const rewardCap = textField('Most it may be worth (₹)', settings.loyaltyRewardCap / 100 || '', {
+    inputmode: 'decimal',
+    hint: 'Blank or 0 means whatever the item costs.',
+  });
+
+  const loyaltyForm = el('div.formgrid', {}, [
+    customersEnabled.field,
+    loyaltyEnabled.field,
+    streakDays.field,
+    birthdayEnabled.field,
+    birthdayWindow.field,
+    rewardLabel.field,
+    rewardCategories.field,
+    rewardCap.field,
+    el('div.form__actions', {}, [
+      el('button.btn.btn--primary', {
+        type: 'button',
+        text: 'Save customer settings',
+        onclick: async (event) => {
+          const days = Number(streakDays.input.value);
+          if (!Number.isInteger(days) || days < 2 || days > 60) {
+            toast.error('A streak needs between 2 and 60 days.');
+            return;
+          }
+          const window = Number(birthdayWindow.input.value || 0);
+          if (!Number.isInteger(window) || window < 0 || window > 30) {
+            toast.error('The birthday window must be between 0 and 30 days.');
+            return;
+          }
+          const capText = String(rewardCap.input.value || '').trim();
+          const cap = capText ? parseRupeesToPaise(capText) : 0;
+          if (cap === null) {
+            toast.error('Enter the cap as an amount, for example 250.');
+            return;
+          }
+
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            await saveSettings({
+              customerTrackingEnabled: customersEnabled.input.checked,
+              loyaltyEnabled: loyaltyEnabled.input.checked,
+              loyaltyStreakDays: days,
+              loyaltyBirthdayEnabled: birthdayEnabled.input.checked,
+              loyaltyBirthdayWindowDays: window,
+              loyaltyRewardLabel: rewardLabel.input.value.trim() || 'Free coffee',
+              loyaltyRewardCategories: rewardCategories.input.value
+                .split(',')
+                .map((entry) => entry.trim())
+                .filter(Boolean),
+              loyaltyRewardCap: cap,
+            });
+            toast.success('Customer settings saved.');
+          } catch (error) {
+            reportError(error);
+          } finally {
+            button.disabled = false;
+          }
+        },
+      }),
+    ]),
+  ]);
+
   /* ----------------------------------------------------- cafe database --- */
 
   const database = cloudConfig();
@@ -788,6 +888,11 @@ export async function renderSettings({ outlet }) {
         'QR ordering',
         'Table codes are generated on the Tables screen. Publish the menu from the Menu screen after changing prices.',
         qrForm
+      ),
+      section(
+        'Regulars and treats',
+        'Who the cafe knows, and what a streak or a birthday is worth.',
+        loyaltyForm
       ),
       section(
         'The cafe database',

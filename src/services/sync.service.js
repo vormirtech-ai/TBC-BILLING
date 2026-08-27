@@ -44,6 +44,7 @@ import { loadInventory } from '../repositories/inventory.repo.js';
 import { loadStaff } from '../repositories/staff.repo.js';
 import { loadTables } from '../repositories/tables.repo.js';
 import { announceOrders } from '../repositories/onlineOrders.repo.js';
+import { loadCustomers, mergeRemoteCustomers } from '../repositories/customers.repo.js';
 
 const CURSOR_KEY = 'tbc.sync.cursor';
 const SEEDED_KEY = 'tbc.sync.seeded';
@@ -237,6 +238,13 @@ async function applyRemoteRows(rows, touched) {
   }
 
   for (const store of new Set([...puts.keys(), ...deletes.keys()])) {
+    // Customers are folded in rather than overwritten: a visit recorded on
+    // another till must not erase one recorded here. See customers.repo.js.
+    if (store === STORES.CUSTOMERS) {
+      await mergeRemoteCustomers(puts.get(store) || []);
+      await applyRemoteBatch(store, [], deletes.get(store) || []);
+      continue;
+    }
     await applyRemoteBatch(store, puts.get(store) || [], deletes.get(store) || []);
   }
   return applied;
@@ -249,6 +257,7 @@ async function refreshCaches(touched) {
   if (touched.has(STORES.INVENTORY)) jobs.push(loadInventory());
   if (touched.has(STORES.STAFF)) jobs.push(loadStaff());
   if (touched.has(STORES.TABLES)) jobs.push(loadTables());
+  if (touched.has(STORES.CUSTOMERS)) jobs.push(loadCustomers());
   if (touched.has(STORES.SETTINGS)) jobs.push(loadSettings());
   if (jobs.length) await Promise.all(jobs);
 

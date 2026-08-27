@@ -17,8 +17,9 @@ import { isEmpty } from '../services/cart.service.js';
 
 const NAV = [
   { path: '/pos', label: 'Counter' },
-  { path: '/orders', label: 'Orders', badge: 'orders', needsQrOrdering: true },
+  { path: '/orders', label: 'Orders', badge: 'orders' },
   { path: '/tables', label: 'Tables' },
+  { path: '/customers', label: 'Customers', needsCustomers: true },
   { path: '/history', label: 'Bills' },
   { path: '/dashboard', label: 'Dashboard', adminOnly: true },
   { path: '/inventory', label: 'Stock', badge: 'stock', adminOnly: true },
@@ -50,7 +51,7 @@ export function renderShell() {
 
   const links = NAV.filter((entry) => {
     if (entry.adminOnly && !isAdmin) return false;
-    if (entry.needsQrOrdering && !settings.qrOrderingEnabled) return false;
+    if (entry.needsCustomers && !settings.customerTrackingEnabled) return false;
     if (entry.path === '/history' && !isAdmin && !settings.cashierCanViewHistory) return false;
     return true;
   });
@@ -198,7 +199,7 @@ export async function refreshBadges(root = document) {
 
       ordersBadge.textContent = count > 99 ? '99+' : String(count);
       ordersBadge.hidden = count === 0;
-      ordersBadge.title = `${count} order${count === 1 ? '' : 's'} waiting`;
+      ordersBadge.title = `${count} order${count === 1 ? '' : 's'} waiting to be accepted`;
 
       // The whole button goes red while anything is waiting, so it is visible
       // from across the counter rather than needing to be read.

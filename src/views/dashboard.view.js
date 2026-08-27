@@ -104,7 +104,16 @@ export async function renderDashboard({ outlet }) {
         `${totals.orderCount} bill${totals.orderCount === 1 ? '' : 's'}`
       ),
       stat('Items sold', String(totals.itemCount), `${totals.orderCount ? Math.round((totals.itemCount / totals.orderCount) * 10) / 10 : 0} per bill`),
-      stat('Average bill', formatMoney(totals.averageOrder, symbol), totals.discountTotal ? `${formatMoney(totals.discountTotal, symbol)} discounted` : 'No discounts'),
+      stat(
+        'Average bill',
+        formatMoney(totals.averageOrder, symbol),
+        [
+          totals.discountTotal ? `${formatMoney(totals.discountTotal, symbol)} discounted` : '',
+          totals.rewardTotal ? `${formatMoney(totals.rewardTotal, symbol)} given as treats` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'No discounts'
+      ),
       stat(
         'Business day',
         dayRecord ? pad(dayRecord.dayNumber, 2) : '—',

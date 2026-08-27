@@ -71,6 +71,7 @@ export function filterTransactions(rows, filters = {}) {
       matchesQuery(row.id, query) ||
       matchesQuery(row.cashier, query) ||
       matchesQuery(row.customerName, query) ||
+      matchesQuery(row.customerPhone, query) ||
       row.items.some((item) => matchesQuery(item.name, query))
     );
   });

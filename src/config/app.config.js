@@ -22,11 +22,11 @@ export const APP = {
   dbName: 'tbc-pos',
   /**
    * 2 added the stock, staff, table and QR-ordering stores. 3 added the sync
-   * outbox and relaxed the bill-number index. The upgrade only creates stores
-   * that are missing, so a till already holding sales keeps every bill it has
-   * however far back it is coming from.
+   * outbox and relaxed the bill-number index. 4 added the customer book. The
+   * upgrade only creates stores that are missing, so a till already holding
+   * sales keeps every bill it has however far back it is coming from.
    */
-  dbVersion: 3,
+  dbVersion: 4,
 };
 
 /** Accounts created the first time the app runs on a device. */
@@ -109,6 +109,29 @@ export const DEFAULT_SETTINGS = {
   /** Seconds between checks for new orders when cloud sync is on. */
   cloudSyncPollSeconds: 10,
 
+  /* ---------------------------------------------------------- regulars --- */
+
+  /** Bills can be attached to a customer, so the cafe knows who its regulars are. */
+  customerTrackingEnabled: true,
+  /** Ask for a phone number at the counter rather than leaving it to be remembered. */
+  askForCustomerAtCounter: true,
+
+  /** Streak and birthday treats. Switch off and the customer book still works. */
+  loyaltyEnabled: true,
+  /**
+   * Days in a row a customer has to come in to earn a free drink. Days the
+   * cafe was shut do not break a streak — see loyalty.service.js.
+   */
+  loyaltyStreakDays: 5,
+  loyaltyBirthdayEnabled: true,
+  /** Days either side of a birthday the treat still stands. 0 = on the day. */
+  loyaltyBirthdayWindowDays: 0,
+  loyaltyRewardLabel: 'Free coffee',
+  /** Menu categories a free drink may be taken from. */
+  loyaltyRewardCategories: ['Hot', 'Iced', 'Cold Brews', "Frappe's"],
+  /** Most a free drink may be worth, in paise. 0 = whatever the drink costs. */
+  loyaltyRewardCap: 0,
+
   /* ------------------------------------------------------------- staff --- */
 
   /** Shift length used when a new shift is added to the roster. */
@@ -154,14 +177,56 @@ export const STOCK_MOVEMENT_KINDS = {
 export const ORDER_SOURCES = { COUNTER: 'COUNTER', QR: 'QR' };
 
 /**
- * Life of an order that arrives from a table QR code.
- * NEW → ACCEPTED → BILLED, or NEW → REJECTED.
+ * Life of an order, whether it was taken at the counter or sent in from a
+ * table's QR code.
+ *
+ *   NEW       a customer has asked for it; staff have not agreed to it yet.
+ *             Only QR orders start here — an order taken at the counter was
+ *             agreed to by the person taking it.
+ *   ACCEPTED  being made.
+ *   READY     made, waiting to go out.
+ *   SERVED    on the table, not yet paid for.
+ *   BILLED    paid for; the bill is now the record.
+ *   REJECTED  turned down or cancelled.
  */
 export const ONLINE_ORDER_STATUS = {
   NEW: 'NEW',
   ACCEPTED: 'ACCEPTED',
+  READY: 'READY',
+  SERVED: 'SERVED',
   BILLED: 'BILLED',
   REJECTED: 'REJECTED',
+};
+
+/** The same thing, under the name the rest of the app now uses. */
+export const ORDER_STATUS = ONLINE_ORDER_STATUS;
+
+/** Wording for each state, in the words a cafe would use out loud. */
+export const ORDER_STATUS_LABELS = {
+  NEW: 'Waiting',
+  ACCEPTED: 'Being made',
+  READY: 'Ready',
+  SERVED: 'Served',
+  BILLED: 'Billed',
+  REJECTED: 'Cancelled',
+};
+
+/** Orders still on the floor — everything a board should show as live. */
+export const OPEN_ORDER_STATUSES = [
+  ONLINE_ORDER_STATUS.NEW,
+  ONLINE_ORDER_STATUS.ACCEPTED,
+  ONLINE_ORDER_STATUS.READY,
+  ONLINE_ORDER_STATUS.SERVED,
+];
+
+/** What each state can move to next. Anything not listed here is not offered. */
+export const ORDER_STATUS_FLOW = {
+  NEW: [ONLINE_ORDER_STATUS.ACCEPTED, ONLINE_ORDER_STATUS.REJECTED],
+  ACCEPTED: [ONLINE_ORDER_STATUS.READY, ONLINE_ORDER_STATUS.REJECTED],
+  READY: [ONLINE_ORDER_STATUS.SERVED, ONLINE_ORDER_STATUS.ACCEPTED],
+  SERVED: [ONLINE_ORDER_STATUS.READY],
+  BILLED: [],
+  REJECTED: [],
 };
 
 /** What a table is doing right now. Derived from open orders and bills. */

@@ -1,21 +1,34 @@
 /**
- * Orders that arrive from a table QR code.
+ * Orders — everything the cafe has agreed to make but has not yet been paid for.
  *
- * An order placed from a customer's phone is a REQUEST, not a sale. It carries
- * no payment and books nothing; it lands in a queue for staff to accept, and
- * only then does it become a bill through the normal counter flow. That is
- * deliberate — a stranger with a phone should not be able to write into the
- * cafe's takings, and a member of staff should always be the one who decides
- * that an order is real.
+ * Two things end up here. An order taken at the counter and sent to the kitchen,
+ * so the till is free for the next customer while that one is being made; and an
+ * order that arrived from a table's QR code.
  *
- * Placing an order is therefore the one write in this app that does not require
- * a signed-in user. Accepting, rejecting and billing all do.
+ * The difference between them is who agreed to it. An order placed from a
+ * customer's phone is a REQUEST, not a sale: it carries no payment and books
+ * nothing, it lands in the queue as NEW, and a member of staff decides whether
+ * it is real. An order taken at the counter was agreed to by the person taking
+ * it, so it starts at ACCEPTED — already being made.
+ *
+ * Either way an order only becomes money when it is billed through the counter.
+ * That is why placing one is the single write in this app that does not require
+ * a signed-in user, and why every other move on an order does.
+ *
+ * The store is still called onlineOrders, from when QR orders were the only
+ * kind. Renaming it would mean a migration that buys the cafe nothing.
  */
 
 import { STORES, getAll, getByKey, put, remove, putMany, clearStore } from '../db/database.js';
 import { requireSignedIn, getSession } from '../core/session.js';
 import { AppError, uid } from '../core/utils.js';
-import { ONLINE_ORDER_STATUS } from '../config/app.config.js';
+import {
+  ONLINE_ORDER_STATUS,
+  ORDER_SOURCES,
+  ORDER_STATUS_FLOW,
+  ORDER_STATUS_LABELS,
+  OPEN_ORDER_STATUSES,
+} from '../config/app.config.js';
 
 const listeners = new Set();
 
@@ -47,9 +60,23 @@ export function listOrders() {
   );
 }
 
+/** Orders a customer has asked for and nobody has agreed to yet. */
 export async function listPendingOrders() {
   const rows = await listOrders();
   return rows.filter((row) => row.status === ONLINE_ORDER_STATUS.NEW);
+}
+
+/** Everything still on the floor: waiting, being made, ready, or served. */
+export async function listOpenOrders() {
+  const rows = await listOrders();
+  return rows.filter((row) => OPEN_ORDER_STATUSES.includes(row.status));
+}
+
+/** Open orders for one table, newest first. */
+export async function listOrdersForTable(tableId) {
+  if (!tableId) return [];
+  const rows = await listOpenOrders();
+  return rows.filter((row) => row.tableId === tableId);
 }
 
 export function getOrder(id) {
@@ -123,7 +150,10 @@ export async function placeOrder(draft) {
     // the order is billed, so this is an estimate, never the charge.
     estimatedTotal: lines.reduce((total, line) => total + line.unitPrice * line.quantity, 0),
     customerName: String(draft.customerName || '').slice(0, 60),
+    customerId: String(draft.customerId || ''),
+    customerPhone: String(draft.customerPhone || ''),
     note: String(draft.note || '').slice(0, 200),
+    source: ORDER_SOURCES.QR,
     status: ONLINE_ORDER_STATUS.NEW,
     placedAt: draft.placedAt || now,
     deviceId: draft.deviceId || '',
@@ -139,6 +169,120 @@ export async function placeOrder(draft) {
   await put(STORES.ONLINE_ORDERS, order);
   announceOrders();
   return order;
+}
+
+/**
+ * Take an order at the counter and send it to the kitchen.
+ *
+ * The till is handed back empty afterwards, so one person can keep serving
+ * while the order is made. It comes back to the counter to be paid for through
+ * the same route a QR order does.
+ *
+ * @param {{lines:Array, tableId?:string, tableName?:string, customerName?:string,
+ *          customerId?:string, customerPhone?:string, note?:string}} draft
+ */
+export async function createCounterOrder(draft) {
+  const session = requireSignedIn();
+  const lines = validateLines(
+    (draft.lines || []).map((line) => ({ ...line, code: line.code || line.itemId }))
+  );
+
+  const now = new Date().toISOString();
+  const order = {
+    id: uid('ord'),
+    code: shortCode(),
+    tableId: draft.tableId || '',
+    tableToken: '',
+    tableName: draft.tableName || '',
+    lines,
+    estimatedTotal: lines.reduce((total, line) => total + line.unitPrice * line.quantity, 0),
+    customerName: String(draft.customerName || '').slice(0, 60),
+    customerId: String(draft.customerId || ''),
+    customerPhone: String(draft.customerPhone || ''),
+    note: String(draft.note || '').slice(0, 200),
+    source: ORDER_SOURCES.COUNTER,
+    // Nobody has to agree to an order the counter itself took.
+    status: ONLINE_ORDER_STATUS.ACCEPTED,
+    placedAt: now,
+    deviceId: '',
+    acceptedAt: now,
+    acceptedBy: session.username,
+    billedAt: null,
+    transactionId: '',
+    orderNo: '',
+    rejectedAt: null,
+    rejectReason: '',
+  };
+
+  await put(STORES.ONLINE_ORDERS, order);
+  announceOrders();
+  return order;
+}
+
+/**
+ * Move an order along: being made → ready → served, or back a step when
+ * somebody taps the wrong thing. What may follow what is in ORDER_STATUS_FLOW,
+ * so an order can never jump straight to billed without a bill existing.
+ */
+export async function setOrderStatus(id, status) {
+  requireSignedIn();
+  const order = await getOrder(id);
+  if (!order) throw new AppError('That order is no longer in the queue.', 'NOT_FOUND');
+
+  const allowed = ORDER_STATUS_FLOW[order.status] || [];
+  if (!allowed.includes(status)) {
+    throw new AppError(
+      `An order that is ${(ORDER_STATUS_LABELS[order.status] || order.status).toLowerCase()} cannot be marked ${(
+        ORDER_STATUS_LABELS[status] || status
+      ).toLowerCase()}.`,
+      'BAD_STATUS'
+    );
+  }
+
+  const now = new Date().toISOString();
+  const stamps = {
+    [ONLINE_ORDER_STATUS.ACCEPTED]: { acceptedAt: now, acceptedBy: getSession()?.username || '' },
+    [ONLINE_ORDER_STATUS.READY]: { readyAt: now },
+    [ONLINE_ORDER_STATUS.SERVED]: { servedAt: now },
+  };
+
+  const record = { ...order, status, ...(stamps[status] || {}), updatedAt: now };
+  await put(STORES.ONLINE_ORDERS, record);
+  announceOrders();
+  return record;
+}
+
+/**
+ * Change what an open order is for.
+ *
+ * An order that was ready or served and then changed goes back to being made,
+ * because it is not ready any more — somebody has to make the new part of it.
+ */
+export async function updateOrder(id, patch) {
+  requireSignedIn();
+  const order = await getOrder(id);
+  if (!order) throw new AppError('That order is no longer in the queue.', 'NOT_FOUND');
+  if (order.status === ONLINE_ORDER_STATUS.BILLED) {
+    throw new AppError('That order has already been billed.', 'ALREADY_BILLED');
+  }
+
+  const lines = patch.lines
+    ? validateLines(patch.lines.map((line) => ({ ...line, code: line.code || line.itemId })))
+    : order.lines;
+
+  const settled = [ONLINE_ORDER_STATUS.READY, ONLINE_ORDER_STATUS.SERVED];
+  const record = {
+    ...order,
+    ...patch,
+    lines,
+    estimatedTotal: lines.reduce((total, line) => total + line.unitPrice * line.quantity, 0),
+    status: patch.lines && settled.includes(order.status) ? ONLINE_ORDER_STATUS.ACCEPTED : order.status,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await put(STORES.ONLINE_ORDERS, record);
+  announceOrders();
+  return record;
 }
 
 /** Store an order that arrived from somewhere else, without re-issuing its id. */
@@ -230,8 +374,12 @@ export async function pruneFinishedOrders(olderThanDays = 3) {
   const cutoff = Date.now() - olderThanDays * 86400000;
   const rows = await getAll(STORES.ONLINE_ORDERS);
 
+  // Only orders that are finished with. An order still on the floor — being
+  // made, ready, or served and not yet paid for — is somebody's coffee, however
+  // long it has been sitting there.
+  const finished = [ONLINE_ORDER_STATUS.BILLED, ONLINE_ORDER_STATUS.REJECTED];
   const stale = rows.filter(
-    (row) => row.status !== ONLINE_ORDER_STATUS.NEW && new Date(row.placedAt).getTime() < cutoff
+    (row) => finished.includes(row.status) && new Date(row.placedAt).getTime() < cutoff
   );
   for (const row of stale) await remove(STORES.ONLINE_ORDERS, row.id);
   return stale.length;

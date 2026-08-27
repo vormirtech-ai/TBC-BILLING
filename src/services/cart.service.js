@@ -24,6 +24,11 @@ const state = {
   lines: [],
   discount: { type: 'PERCENT', value: 0 },
   customerName: '',
+  /** The regular this order belongs to, when one has been looked up. */
+  customerId: '',
+  customerPhone: '',
+  /** A loyalty treat: one item on the order given free. See loyalty.service.js. */
+  reward: null,
   note: '',
   /** Which table this order is for, when the cafe seats people. */
   tableId: '',
@@ -49,7 +54,20 @@ function persist() {
   }
 }
 
+/**
+ * A reward belongs to a line. Take the line away — or empty the order — and the
+ * free coffee has nothing to be free on, so it goes too. Doing this before
+ * every repaint is what stops a cleared cart from carrying a phantom discount.
+ */
+function reconcileReward() {
+  if (!state.reward) return;
+  const line = state.lines.find((row) => row.lineId === state.reward.lineId);
+  if (!line) state.reward = null;
+  else state.reward = { ...state.reward, name: line.name, unitPrice: line.unitPrice };
+}
+
 function announce() {
+  reconcileReward();
   persist();
   const snapshot = getCart();
   listeners.forEach((fn) => fn(snapshot));
@@ -67,6 +85,9 @@ export function restoreDraft() {
     );
     state.discount = saved.discount || { type: 'PERCENT', value: 0 };
     state.customerName = saved.customerName || '';
+    state.customerId = saved.customerId || '';
+    state.customerPhone = saved.customerPhone || '';
+    state.reward = saved.reward || null;
     state.note = saved.note || '';
     state.tableId = saved.tableId || '';
     state.tableName = saved.tableName || '';
@@ -97,12 +118,16 @@ export function quantityOf(itemId) {
 
 /** The cart, fully priced against current settings. */
 export function getCart() {
-  const totals = priceOrder(state.lines, getSettings(), state.discount);
+  reconcileReward();
+  const totals = priceOrder(state.lines, getSettings(), state.discount, state.reward);
   return {
     ...totals,
     lines: totals.items,
     discount: { ...state.discount },
+    reward: state.reward ? { ...state.reward } : null,
     customerName: state.customerName,
+    customerId: state.customerId,
+    customerPhone: state.customerPhone,
     note: state.note,
     tableId: state.tableId,
     tableName: state.tableName,
@@ -201,6 +226,47 @@ export function setCustomerName(name) {
   persist();
 }
 
+/**
+ * Attach a regular to this order, or pass null to take them off it.
+ *
+ * Taking the customer off also takes off any treat they had earned: the reward
+ * belongs to the person, not to the order.
+ */
+export function setCustomer(customer) {
+  if (!customer) {
+    state.customerId = '';
+    state.customerPhone = '';
+    state.reward = null;
+  } else {
+    state.customerId = customer.id || '';
+    state.customerPhone = customer.phone || '';
+    if (customer.name) state.customerName = String(customer.name).slice(0, 60);
+  }
+  announce();
+  return getCart();
+}
+
+export function getCustomerId() {
+  return state.customerId;
+}
+
+/** Put a loyalty treat on the order. See loyalty.service.js for what is earned. */
+export function setReward(reward) {
+  if (!reward) {
+    state.reward = null;
+  } else {
+    const line = state.lines.find((row) => row.lineId === reward.lineId);
+    if (!line) throw new AppError('That item is no longer on the order.', 'NOT_FOUND');
+    state.reward = { ...reward, name: line.name, unitPrice: line.unitPrice };
+  }
+  announce();
+  return getCart();
+}
+
+export function clearReward() {
+  return setReward(null);
+}
+
 export function setNote(note) {
   state.note = String(note || '').slice(0, 200);
   persist();
@@ -234,11 +300,16 @@ export function loadOnlineOrder(order, table) {
     note: line.note || '',
   }));
   state.discount = { type: 'PERCENT', value: 0 };
+  state.reward = null;
   state.customerName = order.customerName || '';
+  state.customerId = order.customerId || '';
+  state.customerPhone = order.customerPhone || '';
   state.note = order.note || '';
   state.tableId = table?.id || order.tableId || '';
   state.tableName = table?.name || order.tableName || '';
-  state.source = ORDER_SOURCES.QR;
+  // An order taken at the counter and recalled is still a counter order; only
+  // one that came in from a phone bills as a QR order.
+  state.source = order.source || ORDER_SOURCES.QR;
   state.onlineOrderId = order.id;
   announce();
   return getCart();
@@ -247,7 +318,10 @@ export function loadOnlineOrder(order, table) {
 export function clearCart() {
   state.lines = [];
   state.discount = { type: 'PERCENT', value: 0 };
+  state.reward = null;
   state.customerName = '';
+  state.customerId = '';
+  state.customerPhone = '';
   state.note = '';
   state.tableId = '';
   state.tableName = '';

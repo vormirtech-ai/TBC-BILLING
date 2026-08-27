@@ -52,6 +52,7 @@ export function renderReceipt(txn) {
       line('Date', `${formatDate(created)} ${formatTime(created, true)}`),
       line('Cashier', txn.cashierName || txn.cashier),
       txn.customerName ? line('Customer', txn.customerName) : null,
+      txn.customerPhone ? line('Phone', txn.customerPhone) : null,
       txn.dayNumber ? line('Business day', String(txn.dayNumber)) : null,
     ]),
 
@@ -61,6 +62,12 @@ export function renderReceipt(txn) {
 
     el('div.receipt__totals', {}, [
       line('Subtotal', formatMoney(txn.subtotal, symbol)),
+      txn.rewardAmount
+        ? line(
+            `${txn.rewardLabel || 'Reward'}${txn.rewardItemName ? ` (${txn.rewardItemName})` : ''}`,
+            `−${formatMoney(txn.rewardAmount, symbol)}`
+          )
+        : null,
       txn.discountAmount
         ? line(
             `Discount${txn.discountType === 'PERCENT' ? ` (${formatRate(txn.discountValue)})` : ''}`,

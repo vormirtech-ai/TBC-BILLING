@@ -31,6 +31,7 @@ import { seedUsersIfEmpty } from './repositories/users.repo.js';
 import { loadInventory } from './repositories/inventory.repo.js';
 import { loadStaff } from './repositories/staff.repo.js';
 import { loadTables } from './repositories/tables.repo.js';
+import { loadCustomers } from './repositories/customers.repo.js';
 import { pruneFinishedOrders } from './repositories/onlineOrders.repo.js';
 import { restoreDraft } from './services/cart.service.js';
 import { bootstrap, startSync, stopSync } from './services/sync.service.js';
@@ -49,6 +50,7 @@ import { renderStaff } from './views/staff.view.js';
 import { renderTables } from './views/tables.view.js';
 import { renderOrders } from './views/orders.view.js';
 import { renderCustomerOrder } from './views/customer.view.js';
+import { renderCustomers } from './views/customers.view.js';
 import { renderSetup } from './views/setup.view.js';
 import { renderJoin } from './views/join.view.js';
 
@@ -159,7 +161,7 @@ async function boot() {
     const [menuResult, userResult] = await Promise.all([seedMenuIfEmpty(), seedUsersIfEmpty()]);
 
     // Caches the screens read synchronously while painting.
-    await Promise.all([loadMenu(), loadInventory(), loadStaff(), loadTables()]);
+    await Promise.all([loadMenu(), loadInventory(), loadStaff(), loadTables(), loadCustomers()]);
 
     restoreSession();
     refreshShell();
@@ -179,6 +181,7 @@ async function boot() {
     defineRoute('/orders', { render: renderOrders });
     defineRoute('/tables', { render: renderTables });
     defineRoute('/history', { render: renderHistory });
+    defineRoute('/customers', { render: renderCustomers });
     defineRoute('/dashboard', { render: renderDashboard, role: ROLES.ADMIN });
     defineRoute('/inventory', { render: renderInventory, role: ROLES.ADMIN });
     defineRoute('/staff', { render: renderStaff, role: ROLES.ADMIN });
@@ -219,8 +222,8 @@ async function boot() {
         toast.warn('Bill history is switched off for cashiers.');
         return '/pos';
       }
-      if (path === '/orders' && !getSettings().qrOrderingEnabled) {
-        toast.info('QR ordering is switched off in Settings.');
+      if (path === '/customers' && !getSettings().customerTrackingEnabled) {
+        toast.info('Customer records are switched off in Settings.');
         return '/pos';
       }
       return undefined;

@@ -250,6 +250,16 @@ export async function renderCustomerOrder({ outlet }) {
       maxlength: 200,
     });
 
+    // Optional, and said plainly: the number is what links this order to the
+    // customer's own visits, and nothing else is done with it.
+    const phoneInput = el('input.input', {
+      type: 'tel',
+      inputmode: 'numeric',
+      placeholder: 'Your phone number (optional)',
+      maxlength: 18,
+      autocomplete: 'tel',
+    });
+
     const lines = [...state.lines.values()].map(({ item, quantity }) =>
       el('div.customer__reviewline', {}, [
         el('span', { text: `${quantity} × ${item.name}` }),
@@ -281,6 +291,10 @@ export async function renderCustomerOrder({ outlet }) {
         ]),
         snapshot.taxNote ? el('p.hint', { text: snapshot.taxNote }) : null,
         nameInput,
+        phoneInput,
+        el('p.hint', {
+          text: 'A phone number keeps your visits counted, so the cafe knows when a coffee is on them.',
+        }),
         noteInput,
         send,
         el('p.customer__smallprint', {
@@ -299,6 +313,7 @@ export async function renderCustomerOrder({ outlet }) {
           tableToken: token,
           tableName,
           customerName: nameInput.value,
+          customerPhone: phoneInput.value,
           note: noteInput.value,
           lines: [...state.lines.values()].map(({ item, quantity }) => ({
             code: item.code,

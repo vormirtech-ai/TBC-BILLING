@@ -1,11 +1,15 @@
 /** The counter screen. Fast add, live totals, payment in three keystrokes. */
 
-import { el, clear, debounce, formatTime, AppError } from '../core/utils.js';
+import { el, clear, debounce, formatTime, businessDateKey, AppError } from '../core/utils.js';
 import { formatMoney, parseRupeesToPaise, formatRate } from '../core/money.js';
 import { getSettings } from '../repositories/settings.repo.js';
 import { searchMenu, getCategories, getItem, onMenuChange } from '../repositories/menu.repo.js';
 import * as cart from '../services/cart.service.js';
-import { completeSale } from '../services/order.service.js';
+import { completeSale, sendToKitchen } from '../services/order.service.js';
+import * as customersRepo from '../repositories/customers.repo.js';
+import { customerFields } from '../ui/customerFields.js';
+import * as loyalty from '../services/loyalty.service.js';
+import { listDays } from '../repositories/businessDays.repo.js';
 import { openModal, confirmDialog } from '../ui/modal.js';
 import { toast, reportError } from '../ui/toast.js';
 import { printReceipt, renderReceipt } from '../ui/receipt.js';
@@ -22,6 +26,22 @@ export function renderPos({ outlet }) {
   const symbol = settings.currencySymbol || '₹';
 
   const state = { query: '', category: 'All', availableOnly: true };
+
+  /**
+   * Days the cafe traded, which is the calendar a streak is counted on. Loaded
+   * once and refreshed after a sale; a day out of date only ever costs somebody
+   * a free coffee a day early, never a wrong bill.
+   */
+  let tradingDays = [];
+  const refreshTradingDays = () =>
+    listDays()
+      .then((rows) => {
+        tradingDays = rows.map((row) => row.date);
+      })
+      .catch(() => {});
+  refreshTradingDays();
+
+  const today = () => businessDateKey(new Date(), settings.dayRolloverHour);
 
   /* ------------------------------------------------------------ menu --- */
 
@@ -146,6 +166,27 @@ export function renderPos({ outlet }) {
     onclick: openPayment,
   });
 
+  /**
+   * Send the order to be made without taking payment yet — the table is still
+   * sitting there, and the till is needed for the next person in the queue.
+   */
+  const kitchenButton = el('button.btn.btn--ghost.btn--sm.btn--block', {
+    type: 'button',
+    onclick: async () => {
+      kitchenButton.disabled = true;
+      try {
+        const order = await sendToKitchen();
+        toast.success(
+          `Order ${order.code} is with the kitchen${order.tableName ? ` for ${order.tableName}` : ''}.`
+        );
+      } catch (error) {
+        reportError(error);
+      } finally {
+        kitchenButton.disabled = cart.isEmpty();
+      }
+    },
+  });
+
   const tableButton = el('button.btn.btn--ghost.btn--sm.btn--block', {
     type: 'button',
     onclick: openTablePicker,
@@ -207,6 +248,261 @@ export function renderPos({ outlet }) {
     oninput: (event) => cart.setCustomerName(event.target.value),
   });
 
+  /* -------------------------------------------------------- customers --- */
+
+  const customerButton = el('button.btn.btn--ghost.btn--sm.btn--block', {
+    type: 'button',
+    onclick: openCustomerPicker,
+  });
+
+  /** Where the earned-but-not-yet-given free coffee is offered, and taken back. */
+  const rewardBar = el('div.rewardbar', { hidden: true });
+
+  /** The record the order is attached to, if any. */
+  function attachedCustomer() {
+    const id = cart.getCart().customerId;
+    return id ? customersRepo.getCustomer(id) || null : null;
+  }
+
+  /**
+   * Find somebody, or add them.
+   *
+   * The phone number is the whole search: it is what a cashier can ask for
+   * across a counter, and it is what the record is keyed on. Typing one that
+   * nobody has yet offers to add it, so a new regular takes one keystroke more
+   * than an old one.
+   */
+  function openCustomerPicker() {
+    const current = attachedCustomer();
+
+    const search = el('input.input', {
+      type: 'search',
+      inputmode: 'numeric',
+      placeholder: 'Phone number or name',
+      'aria-label': 'Find a customer',
+      autocomplete: 'off',
+    });
+    const results = el('div.customerpick__list');
+    const addBox = el('div', { hidden: true });
+
+    let fields = null;
+
+    function chooseCustomer(customer) {
+      cart.setCustomer(customer);
+      modal.close();
+      const earned = pendingFor(customer);
+      toast.success(
+        `${customer.name || customersRepo.formatPhone(customer.phone)} — visit ${
+          customer.visitCount + 1
+        }.${earned.length ? ' A free coffee is due.' : ''}`
+      );
+    }
+
+    function paintResults() {
+      const query = search.value.trim();
+      const matches = customersRepo.searchCustomers({ query, limit: 8 });
+      clear(results);
+
+      for (const customer of matches) {
+        const progress = loyalty.streakProgress(customer, {
+          today: today(),
+          tradingDays,
+          settings,
+        });
+        results.appendChild(
+          el('button.customerpick__row', {
+            type: 'button',
+            class: customer.id === current?.id ? 'is-active' : '',
+            onclick: () => chooseCustomer(customer),
+          }, [
+            el('span.customerpick__name', {
+              text: customer.name || customersRepo.formatPhone(customer.phone),
+            }),
+            el('span.customerpick__meta', {
+              text: [
+                customersRepo.formatPhone(customer.phone),
+                `${customer.visitCount} visit${customer.visitCount === 1 ? '' : 's'}`,
+                progress.length ? `${progress.length}-day streak` : '',
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            }),
+          ])
+        );
+      }
+
+      const digits = customersRepo.normalisePhone(query);
+      const exact = matches.some((row) => row.phone === digits);
+
+      if (!matches.length) {
+        results.appendChild(
+          el('p.hint', {
+            text: query
+              ? 'Nobody in the book matches that yet.'
+              : 'Start typing a phone number.',
+          })
+        );
+      }
+
+      // Offer to add whoever was just typed, unless they are already there.
+      if (customersRepo.isValidPhone(digits) && !exact) {
+        addBox.hidden = false;
+        clear(addBox);
+        fields = customerFields(null, { phone: digits });
+        addBox.appendChild(
+          el('div.stack', {}, [
+            el('h3.panel__title', { text: `Add ${customersRepo.formatPhone(digits)}` }),
+            fields.node,
+            el('button.btn.btn--primary.btn--block', {
+              type: 'button',
+              text: 'Add and attach to this order',
+              onclick: async () => {
+                try {
+                  const saved = await customersRepo.saveCustomer(fields.read());
+                  chooseCustomer(saved);
+                } catch (error) {
+                  reportError(error);
+                }
+              },
+            }),
+          ])
+        );
+      } else {
+        addBox.hidden = true;
+        clear(addBox);
+        fields = null;
+      }
+    }
+
+    const modal = openModal({
+      title: 'Who is this order for?',
+      subtitle: 'Attaching a customer records the visit and keeps their streak going.',
+      body: el('div.stack.customerpick', {}, [
+        el('label.field', {}, [el('span.field__label', { text: 'Find them' }), search]),
+        results,
+        addBox,
+      ]),
+      actions: [
+        current
+          ? el('button.btn.btn--ghost', {
+              type: 'button',
+              text: 'Take them off this order',
+              onclick: () => {
+                cart.setCustomer(null);
+                modal.close();
+              },
+            })
+          : null,
+        el('button.btn.btn--ghost', { type: 'button', text: 'Close', onclick: () => modal.close() }),
+      ].filter(Boolean),
+    });
+
+    search.addEventListener('input', debounce(paintResults, 120));
+    paintResults();
+    requestAnimationFrame(() => search.focus());
+  }
+
+  /** Treats this customer has earned and not yet been given. */
+  function pendingFor(customer) {
+    if (!customer) return [];
+    return loyalty.pendingRewards(customer, {
+      today: today(),
+      tradingDays,
+      settings,
+      // They are standing at the counter being billed, so today counts.
+      assumeToday: true,
+    });
+  }
+
+  /** Put the free item on the order, choosing the dearest thing it may cover. */
+  function applyReward(customer, earned) {
+    const snapshot = cart.getCart();
+    const line = loyalty.chooseRewardLine(snapshot.lines, settings);
+    if (!line) {
+      toast.info(
+        `Nothing on this order qualifies for a ${
+          (settings.loyaltyRewardLabel || 'free coffee').toLowerCase()
+        }. Add one and it can be given.`
+      );
+      return;
+    }
+    try {
+      cart.setReward(loyalty.buildReward(earned, line, settings));
+      toast.success(`${line.name} is on the house for ${customer.name || 'this customer'}.`);
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
+  function paintRewardBar(snapshot) {
+    clear(rewardBar);
+    const customer = attachedCustomer();
+
+    if (snapshot.reward) {
+      rewardBar.hidden = false;
+      rewardBar.className = 'rewardbar is-applied';
+      rewardBar.append(
+        el('div.rewardbar__text', {}, [
+          el('strong', { text: `${snapshot.reward.label}: ${snapshot.reward.name}` }),
+          el('span', { text: `−${formatMoney(snapshot.rewardAmount, symbol)}` }),
+        ]),
+        el('button.btn.btn--ghost.btn--sm', {
+          type: 'button',
+          text: 'Remove',
+          onclick: () => cart.clearReward(),
+        })
+      );
+      return;
+    }
+
+    const earned = pendingFor(customer);
+    if (!customer || !earned.length) {
+      rewardBar.hidden = true;
+      return;
+    }
+
+    const first = earned[0];
+    rewardBar.hidden = false;
+    rewardBar.className = 'rewardbar';
+    rewardBar.append(
+      el('div.rewardbar__text', {}, [
+        el('strong', { text: `${first.label} due` }),
+        el('span', { text: first.detail }),
+      ]),
+      el('button.btn.btn--primary.btn--sm', {
+        type: 'button',
+        text: 'Give it',
+        onclick: () => applyReward(customer, first),
+      })
+    );
+  }
+
+  function paintCustomerButton(snapshot) {
+    const customer = attachedCustomer();
+    if (!customer) {
+      customerButton.textContent = 'Attach a customer';
+      customerButton.classList.remove('is-active');
+      customerInput.hidden = false;
+      return;
+    }
+
+    const progress = loyalty.streakProgress(customer, {
+      today: today(),
+      tradingDays,
+      settings,
+      assumeToday: true,
+    });
+    // One visit is not a streak. Somebody in for the first time gets a count,
+    // not a boast.
+    customerButton.textContent = `${customer.name || customersRepo.formatPhone(customer.phone)} · ${
+      progress.length > 1 ? `${progress.length}-day streak` : `visit ${customer.visitCount + 1}`
+    }`;
+    customerButton.classList.add('is-active');
+    // The name is the customer's own; typing another one over it would only
+    // put two different names on one person's bills.
+    customerInput.hidden = true;
+  }
+
   function qtyButton(label, ariaLabel, handler) {
     return el('button.qty__btn', { type: 'button', text: label, 'aria-label': ariaLabel, onclick: handler });
   }
@@ -229,7 +525,9 @@ export function renderPos({ outlet }) {
             el('div.cart__rowmain', {}, [
               el('span.cart__name', { text: line.name }),
               el('span.cart__unit', {
-                text: `${formatMoney(line.unitPrice, symbol)} each`,
+                text: `${formatMoney(line.unitPrice, symbol)} each${
+                  line.rewardAmount ? ` · one free` : ''
+                }`,
               }),
             ]),
             el('div.qty', {}, [
@@ -259,6 +557,12 @@ export function renderPos({ outlet }) {
     // ---- totals ----
     clear(cartTotals);
     const rows = [['Subtotal', formatMoney(snapshot.subtotal, symbol)]];
+    if (snapshot.rewardAmount) {
+      rows.push([
+        `${snapshot.rewardLabel}${snapshot.rewardItemName ? ` · ${snapshot.rewardItemName}` : ''}`,
+        `−${formatMoney(snapshot.rewardAmount, symbol)}`,
+      ]);
+    }
     if (snapshot.discountAmount) {
       rows.push([
         `Discount${snapshot.discountType === 'PERCENT' ? ` ${formatRate(snapshot.discountValue)}` : ''}`,
@@ -295,11 +599,16 @@ export function renderPos({ outlet }) {
 
     if (customerInput.value !== snapshot.customerName) customerInput.value = snapshot.customerName;
 
+    kitchenButton.textContent = snapshot.onlineOrderId ? 'Update the order' : 'Send to kitchen';
+    kitchenButton.disabled = !snapshot.lines.length;
+
     tableButton.textContent = snapshot.tableName
       ? `Table: ${snapshot.tableName}`
       : 'Assign a table';
     tableButton.classList.toggle('is-active', Boolean(snapshot.tableId));
 
+    paintCustomerButton(snapshot);
+    paintRewardBar(snapshot);
     paintGrid();
   }
 
@@ -334,7 +643,10 @@ export function renderPos({ outlet }) {
     cartList,
     el('div.cart__foot', {}, [
       tableButton,
+      settings.customerTrackingEnabled ? customerButton : null,
       customerInput,
+      settings.customerTrackingEnabled ? rewardBar : null,
+      kitchenButton,
       canDiscount
         ? el('button.btn.btn--ghost.btn--sm.btn--block', {
             type: 'button',
@@ -521,6 +833,12 @@ export function renderPos({ outlet }) {
         el('span', { text: 'Subtotal' }),
         el('span', { text: formatMoney(snapshot.subtotal, symbol) }),
       ]),
+      snapshot.rewardAmount
+        ? el('div.pay__line', {}, [
+            el('span', { text: `${snapshot.rewardLabel} · ${snapshot.rewardItemName}` }),
+            el('span', { text: `−${formatMoney(snapshot.rewardAmount, symbol)}` }),
+          ])
+        : null,
       snapshot.discountAmount
         ? el('div.pay__line', {}, [
             el('span', { text: 'Discount' }),
@@ -593,6 +911,8 @@ export function renderPos({ outlet }) {
         });
         modal.close();
         refreshDayChip(document);
+        refreshTradingDays();
+        announceVisit(saved);
 
         for (const shortage of saved.stockShortages || []) {
           toast.warn(`${shortage.name} has run out — the shelf is now showing zero.`);
@@ -604,6 +924,35 @@ export function renderPos({ outlet }) {
         confirm.textContent = 'Confirm payment';
       }
     });
+  }
+
+  /**
+   * Tell the cashier where this customer now stands, so they can say it out
+   * loud while handing over the change. That sentence is the entire point of
+   * keeping a streak.
+   */
+  function announceVisit(txn) {
+    if (!txn.customerId) return;
+    const customer = customersRepo.getCustomer(txn.customerId);
+    if (!customer || settings.loyaltyEnabled === false) return;
+
+    const name = customer.name || customersRepo.formatPhone(customer.phone);
+    const progress = loyalty.streakProgress(customer, { today: today(), tradingDays, settings });
+    if (!progress.length) return;
+
+    if (progress.toGo === 0) {
+      toast.success(
+        `${name} is on ${progress.length} days in a row — a ${(
+          settings.loyaltyRewardLabel || 'free coffee'
+        ).toLowerCase()} is waiting on the next visit.`
+      );
+    } else {
+      toast.info(
+        `${name}: ${progress.length} day${progress.length === 1 ? '' : 's'} in a row, ${
+          progress.toGo
+        } more for a ${(settings.loyaltyRewardLabel || 'free coffee').toLowerCase()}.`
+      );
+    }
   }
 
   /* --------------------------------------------------------- success --- */
@@ -647,14 +996,12 @@ export function renderPos({ outlet }) {
     el('section.pos__menu', {}, [
       el('div.pos__toolbar', {}, [
         el('div.search', {}, [search]),
-        settings.qrOrderingEnabled
-          ? el('button.btn.btn--ghost.btn--sm', {
-              type: 'button',
-              text: 'QR orders',
-              title: 'Orders sent in from table QR codes',
-              onclick: () => navigate('/orders'),
-            })
-          : null,
+        el('button.btn.btn--ghost.btn--sm', {
+          type: 'button',
+          text: 'Order board',
+          title: 'Orders being made, ready, and waiting to be paid for',
+          onclick: () => navigate('/orders'),
+        }),
         el('label.toggle', {}, [
           el('input', {
             type: 'checkbox',

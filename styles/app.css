@@ -2349,10 +2349,42 @@ body.is-login {
 
 /* ------------------------------------------------------------- orders --- */
 
+/* The board is a stack of lanes; each lane is a grid of cards. */
 .orders__list {
+  display: grid;
+  gap: 20px;
+}
+
+.orders__lane {
+  display: grid;
+  gap: 10px;
+}
+
+.orders__lanelist {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
+}
+
+.ordercard__tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pill--source {
+  background: var(--cream-2);
+  color: var(--ink-3);
+}
+
+.pill--ready {
+  background: var(--basil-tint);
+  color: var(--basil);
+}
+
+.pill--served {
+  background: var(--jamun-tint);
+  color: var(--jamun);
 }
 
 .ordercard {
@@ -3532,5 +3564,151 @@ body.is-customer {
 
   @page {
     margin: 6mm;
+  }
+}
+
+/* ---------------------------------------------------------- customers --- */
+
+/*
+ * The counter's loyalty strip. It only appears when there is something to say —
+ * a treat that has been earned, or one that has been given — so it is allowed
+ * to be loud when it does.
+ */
+.rewardbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--jamun);
+  background: var(--jamun-tint);
+}
+
+.rewardbar.is-applied {
+  border-color: var(--basil);
+  background: var(--basil-tint);
+}
+
+.rewardbar__text {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-2);
+  min-width: 0;
+}
+
+.rewardbar__text strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.customerpick__list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.customerpick__row {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+.customerpick__row:hover,
+.customerpick__row.is-active {
+  border-color: var(--jamun);
+  background: var(--jamun-tint);
+}
+
+.customerpick__name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.customerpick__meta {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.table__head--customer,
+.table__row--customer {
+  grid-template-columns: 1.4fr 1fr 0.6fr 0.7fr 1fr 1fr 0.8fr;
+}
+
+.table__name {
+  font-weight: 600;
+}
+
+.table__row--customer .pill {
+  margin-left: 8px;
+}
+
+/* Somebody who is owed something. Worth spotting from across the room. */
+.table__row.is-flagged {
+  background: var(--jamun-tint);
+}
+
+.factgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.fact {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.fact__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+.fact__value {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pillrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.formrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .formrow {
+    grid-template-columns: 1fr;
+  }
+
+  .table__head--customer,
+  .table__row--customer {
+    grid-template-columns: 1.4fr 1fr 0.8fr;
+  }
+
+  .table__row--customer > span:nth-child(n + 4),
+  .table__head--customer > span:nth-child(n + 4) {
+    display: none;
   }
 }

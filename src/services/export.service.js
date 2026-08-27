@@ -41,11 +41,13 @@ const COLUMNS = [
   ['Item Tax', 11],
   ['Line Total', 12],
   ['Order Subtotal', 14],
+  ['Loyalty Reward', 14],
   ['Order Discount', 14],
   ['Order Tax', 12],
   ['Round Off', 11],
   ['Grand Total', 14],
   ['Customer', 18],
+  ['Customer Phone', 15],
   ['Note', 26],
 ];
 
@@ -84,11 +86,13 @@ function transactionRows(transactions) {
         money(item.taxAmount || 0),
         money(item.total),
         first ? money(txn.subtotal) : null,
+        first ? money(txn.rewardAmount || 0) : null,
         first ? money(txn.discountAmount) : null,
         first ? money(txn.taxAmount) : null,
         first ? money(txn.roundOff || 0) : null,
         first ? moneyBold(txn.grandTotal) : null,
         first ? txn.customerName || '' : null,
+        first ? txn.customerPhone || '' : null,
         first ? { v: [txn.note, item.note].filter(Boolean).join(' | '), s: STYLE.WRAP } : item.note || null,
       ]);
     });
@@ -117,6 +121,7 @@ function summaryRows(transactions, { title, subtitle }) {
     ['Items sold', { v: totalItems, s: STYLE.INTEGER }],
     ['Average order value', money(average)],
     ['Discounts given', money(sum(live, (t) => t.discountAmount))],
+    ['Loyalty rewards given', money(sum(live, (t) => t.rewardAmount || 0))],
     [`${settings.taxLabel || 'Tax'} collected`, money(sum(live, (t) => t.taxAmount))],
     [],
     [{ v: 'Payment methods', s: STYLE.BOLD }],

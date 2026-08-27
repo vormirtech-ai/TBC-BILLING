@@ -17,6 +17,7 @@ import { ONLINE_ORDER_STATUS, TABLE_STATUS } from '../config/app.config.js';
 import { getItemByCode, getMenu } from '../repositories/menu.repo.js';
 import * as tablesRepo from '../repositories/tables.repo.js';
 import * as ordersRepo from '../repositories/onlineOrders.repo.js';
+import * as customersRepo from '../repositories/customers.repo.js';
 import * as cart from './cart.service.js';
 import { decodeHandoff, announceStatus, deviceId } from './orderChannel.service.js';
 
@@ -97,7 +98,41 @@ export async function loadOrderIntoCart(order) {
   const loaded = cart.loadOnlineOrder({ ...order, lines: resolved }, table);
   if (table) await tablesRepo.setStatus(table.id, TABLE_STATUS.ORDERED);
 
-  return { cart: loaded, unknown, unavailable, table };
+  // A customer who gave their number on their phone is asking to be counted.
+  // Look them up, and add them to the book if this is their first time, so the
+  // visit lands on a record rather than on nothing.
+  const customer = await attachCustomer(order);
+
+  return { cart: loaded, unknown, unavailable, table, customer };
+}
+
+/**
+ * Put the customer behind this order on the counter with it.
+ *
+ * Fails soft in every direction: an order must always reach the till, whatever
+ * happens to the phone number attached to it.
+ */
+async function attachCustomer(order) {
+  const phone = String(order.customerPhone || '');
+  if (order.customerId) {
+    const known = customersRepo.getCustomer(order.customerId);
+    if (known) {
+      cart.setCustomer(known);
+      return known;
+    }
+  }
+  if (!customersRepo.isValidPhone(phone)) return null;
+
+  try {
+    const existing = await customersRepo.findByPhone(phone);
+    const customer =
+      existing || (await customersRepo.saveCustomer({ phone, name: order.customerName || '' }));
+    cart.setCustomer(customer);
+    return customer;
+  } catch (error) {
+    console.error('[TBC POS] could not attach the customer to this order', error);
+    return null;
+  }
 }
 
 /**
@@ -109,6 +144,19 @@ export async function acceptAndLoad(orderId) {
   await announceStatus(accepted);
   const result = await loadOrderIntoCart(accepted);
   return { order: accepted, ...result };
+}
+
+/**
+ * Bring an order that is already being made back to the counter to be paid for.
+ *
+ * Nothing about its state changes: it is on the board as ready or served, and
+ * it stays that way until a bill exists for it.
+ */
+export async function recallOrder(orderId) {
+  const order = await ordersRepo.getOrder(orderId);
+  if (!order) throw new AppError('That order is no longer in the queue.', 'NOT_FOUND');
+  const result = await loadOrderIntoCart(order);
+  return { order, ...result };
 }
 
 export async function rejectAndAnnounce(orderId, reason) {
