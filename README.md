@@ -499,7 +499,15 @@ and create a project. The free plan is far more than a cafe needs.
 
 **2. Run the setup SQL.** Open the SQL Editor in your project, paste in the
 block the setup screen gives you, and press Run. Once, ever. It creates one
-table, one index, and two small functions for handing out bill numbers.
+table, one index, and two small functions for handing out bill numbers. The same
+block ships as `tbc-setup.sql` next to this README, if you would rather open the
+file than the app.
+
+Re-running it is safe: every statement is written to be repeatable, and nothing
+already in the database is touched — the bills, the menu and the customer book
+all stay where they are. Nothing in it changes when the app gains a feature:
+every kind of record travels through the one `tbc_sync` table, customers and
+orders included.
 
 **3. Connect this device.** Project Settings → API gives you the **Project URL**
 and the **anon public** key. Paste both into the setup screen and press Connect.
@@ -778,6 +786,7 @@ manifest.webmanifest        installable-app metadata
 styles/app.css              design tokens, layout, components, print styles
 assets/                     logo and favicon
 data/menu.published.json    the menu customers see when they scan a table code
+tbc-setup.sql               the block to run once in Supabase → SQL Editor
 
 src/
   main.js                   boot, routes, role guard
@@ -810,7 +819,7 @@ src/
 tests/
   run.mjs                   runs everything below
   pricing.test.mjs          66 assertions on the money maths
-  cafe.test.mjs             78 on quantities, shifts, handoff codes, menu codes
+  cafe.test.mjs             82 on quantities, shifts, handoff codes, menu codes
   loyalty.test.mjs          61 on streaks, birthdays and free-item pricing
   qrcode.test.mjs           138 round-tripping QR codes through a decoder
 ```
@@ -825,7 +834,7 @@ No dependencies, no install, no test runner to configure:
 node tests/run.mjs
 ```
 
-343 assertions across four files.
+347 assertions across four files.
 
 **`pricing.test.mjs` — 66.** The one part of this app where a bug costs real
 money: integer-paise arithmetic, discount distribution (the parts always sum to
@@ -833,11 +842,13 @@ the whole, exactly), inclusive vs exclusive tax, per-item tax overrides,
 discount caps, round-off, and the rule that a menu price change must never alter
 a bill that was already printed.
 
-**`cafe.test.mjs` — 78.** Stock quantities (including four hundred deductions
+**`cafe.test.mjs` — 82.** Stock quantities (including four hundred deductions
 that must not drift), shift and attendance maths (including shifts that cross
 midnight), the handoff code that carries an order between two devices — proving
 a mistyped one is refused and that no price ever travels in it — and the stable
-menu codes two devices use to agree on what an item is.
+menu codes two devices use to agree on what an item is. It also checks that the
+`tbc-setup.sql` shipped with the app is still character-for-character the block
+the setup screen shows, because two copies of anything drift.
 
 **`loyalty.test.mjs` — 61.** Phone numbers written every way an Indian customer
 writes them resolving to one person; birthdays parsed, including 29 February and

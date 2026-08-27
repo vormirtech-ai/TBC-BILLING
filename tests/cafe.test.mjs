@@ -28,6 +28,9 @@ import {
 import { encodeHandoff, decodeHandoff } from '../src/services/orderChannel.service.js';
 import { menuCode } from '../src/repositories/menu.repo.js';
 import { MENU_SEED } from '../src/data/menu.seed.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 let pass = 0;
 let fail = 0;
@@ -248,6 +251,21 @@ ok('codes are short and URL-safe', /^[a-z0-9]{7}$/.test(menuCode('Cappuccino', '
 // A collision would send a customer's order to the wrong drink.
 const codes = MENU_SEED.map((item) => menuCode(item.name, item.category));
 eq('every item on the shipped menu has its own code', new Set(codes).size, MENU_SEED.length);
+
+/* ------------------------------------------------------ setup SQL --- */
+
+// tbc-setup.sql ships next to the app so an operator can hand it to Supabase
+// without opening the app first. The setup screen is the source of truth, and
+// two copies of anything drift, so they are checked against each other here.
+const here = dirname(fileURLToPath(import.meta.url));
+const setupView = readFileSync(join(here, '..', 'src', 'views', 'setup.view.js'), 'utf8');
+const shippedSql = readFileSync(join(here, '..', 'tbc-setup.sql'), 'utf8');
+const inApp = setupView.match(/const SETUP_SQL = `([\s\S]*?)`;/)?.[1] || '';
+
+ok('the setup screen still carries the SQL', inApp.includes('create table if not exists tbc_sync'));
+eq('the shipped SQL file matches the setup screen', shippedSql.trim(), inApp.trim());
+ok('the SQL asks PostgREST to refresh its picture of the database', /notify pgrst/.test(inApp));
+ok('the SQL grants the anon key what the app needs', /grant execute on function tbc_next_order_no/.test(inApp));
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
