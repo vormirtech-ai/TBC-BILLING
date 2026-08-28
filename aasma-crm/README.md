@@ -14,7 +14,9 @@ works with the network cable unplugged.
 
 ### Windows (the normal case)
 
-1. Install **Node.js LTS** from <https://nodejs.org> (one time, needs internet).
+1. Install **Node.js LTS** from <https://nodejs.org> (one time, needs internet) —
+   accept every default. If a Command Prompt or Explorer window was already open,
+   close it afterwards so Windows picks up the new `PATH`.
 2. Unzip this folder somewhere permanent, e.g. `C:\Aasma\aasma-crm`.
 3. Double-click **`setup.bat`** and wait. It installs the components, creates the
    database, offers to load sample data and builds the app.
@@ -214,8 +216,13 @@ system — copy it and you have copied everything.
 
 ## 9. Troubleshooting
 
-**"Node.js was not found"** — install the LTS build from nodejs.org, then run
-`setup.bat` again.
+**"Node.js was not found"** — first, if Node.js is already installed, close the window
+completely and run `setup.bat` again: a Command Prompt opened before the install still
+carries the old `PATH`. The script also looks in the usual install folders itself, so
+this is only reached when Node really is absent. To install it, either download the LTS
+build from <https://nodejs.org> (accept every default) or run
+`winget install OpenJS.NodeJS.LTS` in Command Prompt. Check it worked by opening a **new**
+Command Prompt and typing `node -v` — it should print something like `v22.11.0`.
 
 **The window opens blank** — run `npm run build` in the application folder, then
 `start.bat`.
