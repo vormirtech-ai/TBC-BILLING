@@ -1,0 +1,164 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Aasma Construction brand tokens.
+  Crimson #BC1F43 carries every primary action; the accent #EE3A43 is kept for
+  alerts and highlights so the interface never turns into a wall of red. Greys
+  come straight from the guideline swatches.
+*/
+@layer base {
+  :root {
+    --font-sans: 'Proxima Nova', 'Segoe UI Variable', 'Segoe UI', Inter, system-ui, -apple-system, sans-serif;
+    --font-display: 'Proxima Nova', 'Segoe UI Variable', 'Segoe UI', Inter, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+
+    --background: 220 20% 98%;
+    --foreground: 345 6% 13%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 345 6% 13%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 345 6% 13%;
+
+    --primary: 346 72% 43%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 95%;
+    --secondary-foreground: 345 6% 13%;
+
+    --muted: 220 14% 95%;
+    --muted-foreground: 228 5% 45%;
+
+    --accent: 346 60% 96%;
+    --accent-foreground: 346 72% 35%;
+
+    --destructive: 357 84% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 62% 32%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 33 92% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 12% 89%;
+    --input: 220 12% 87%;
+    --ring: 346 72% 43%;
+
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 345 6% 13%;
+    --sidebar-muted: 228 5% 45%;
+    --sidebar-active: 346 60% 96%;
+    --sidebar-border: 220 12% 91%;
+
+    --shadow-color: 345 20% 20%;
+    --radius: 0.85rem;
+  }
+
+  .dark {
+    --background: 345 8% 8%;
+    --foreground: 220 14% 94%;
+
+    --card: 345 7% 11%;
+    --card-foreground: 220 14% 94%;
+
+    --popover: 345 7% 12%;
+    --popover-foreground: 220 14% 94%;
+
+    --primary: 357 84% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 345 5% 17%;
+    --secondary-foreground: 220 14% 94%;
+
+    --muted: 345 5% 17%;
+    --muted-foreground: 220 6% 64%;
+
+    --accent: 346 30% 20%;
+    --accent-foreground: 357 84% 78%;
+
+    --destructive: 357 74% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 52% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 33 84% 55%;
+    --warning-foreground: 345 8% 8%;
+
+    --border: 345 5% 21%;
+    --input: 345 5% 24%;
+    --ring: 357 84% 58%;
+
+    --sidebar: 345 8% 10%;
+    --sidebar-foreground: 220 14% 92%;
+    --sidebar-muted: 220 6% 62%;
+    --sidebar-active: 346 30% 18%;
+    --sidebar-border: 345 5% 18%;
+
+    --shadow-color: 345 40% 2%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'tnum' 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    @apply tracking-tight;
+  }
+
+  /* A slim scrollbar keeps dense tables from feeling heavy. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* Numbers in tables line up when they share a width. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .card-surface {
+    @apply rounded-lg border border-border bg-card shadow-card;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-muted;
+  }
+
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background-image: linear-gradient(90deg, transparent, hsl(var(--background) / 0.6), transparent);
+  }
+}
