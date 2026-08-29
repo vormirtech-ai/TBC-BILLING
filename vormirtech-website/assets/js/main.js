@@ -89,7 +89,7 @@
         if (op <= 0) continue;
         sctx.beginPath();
         sctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        sctx.fillStyle = 'rgba(255,255,255,' + op.toFixed(3) + ')';
+        sctx.fillStyle = 'rgba(226,234,248,' + op.toFixed(3) + ')';
         sctx.fill();
       }
       if (animated) requestAnimationFrame(function () { paintStars(true); });
@@ -180,7 +180,7 @@
 
       var img = frames[i];
       var cw = canvas.width, ch = canvas.height;
-      ctx.fillStyle = '#07070A';
+      ctx.fillStyle = '#020617';
       ctx.fillRect(0, 0, cw, ch);
 
       var imgRatio = img.width / img.height;

@@ -1,23 +1,31 @@
 /* =========================================================
    Vormir Tech Solutions — design tokens
-   Palette: premium black + gold (dark adaptation)
+   Palette: deep cosmic navy + silver
    Type:    Cormorant (display) / Montserrat (UI + body)
    ========================================================= */
 :root {
-  --bg:            #07070A;
-  --bg-elev:       #101015;
-  --bg-alt:        #0B0B0F;
-  --fg:            #F5F2EC;
-  --muted:         #A29C93;
-  --faint:         #8A847A;
-  --accent:        #D4AF5F;
-  --accent-strong: #E8C87E;
-  --accent-rgb:    212, 175, 95;
-  --on-accent:     #100D06;
-  --border:        rgba(255, 255, 255, .09);
-  --border-strong: rgba(255, 255, 255, .16);
-  --surface:       rgba(255, 255, 255, .035);
-  --surface-hover: rgba(255, 255, 255, .055);
+  --bg:            #020617;
+  --bg-elev:       #0E1223;
+  --bg-alt:        #060B1A;
+  --fg:            #F1F5FB;
+  --muted:         #A7B2C6;
+  --faint:         #8792A8;
+  --accent:        #C6D2E6;
+  --accent-strong: #E8EEF9;
+  --accent-rgb:    198, 210, 230;
+  --on-accent:     #060A14;
+  --border:        rgba(190, 205, 235, .12);
+  --border-strong: rgba(190, 205, 235, .22);
+  --surface:       rgba(190, 205, 235, .045);
+  --surface-hover: rgba(190, 205, 235, .075);
+
+  /* brushed-silver gradient for display type and primary buttons */
+  --silver: linear-gradient(160deg, #FFFFFF 0%, #DCE4F2 30%, #9FADC6 58%, #EDF2FA 82%, #B8C4DA 100%);
+
+  /* nebula tints behind the page */
+  --neb-1: rgba(59, 78, 158, .22);
+  --neb-2: rgba(107, 70, 193, .16);
+  --neb-3: rgba(30, 110, 140, .15);
 
   --font-display: "Cormorant", Georgia, "Times New Roman", serif;
   --font-body:    "Montserrat", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -101,7 +109,15 @@ body.loaded #loader { opacity: 0; pointer-events: none; transition: opacity .6s 
 #scrollProgress {
   position: fixed; top: 0; left: 0; z-index: 900;
   height: 2px; width: 0;
-  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  background: linear-gradient(90deg, #6B46C1, var(--accent-strong), #3B4E9E);
+}
+/* nebula clouds — sits under the starfield, above the flat background */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(62% 48% at 10% 4%,  var(--neb-1), transparent 62%),
+    radial-gradient(52% 42% at 90% 20%, var(--neb-2), transparent 64%),
+    radial-gradient(58% 46% at 72% 92%, var(--neb-3), transparent 62%);
 }
 #starscape {
   position: fixed; inset: 0; z-index: 0;
@@ -125,7 +141,7 @@ main, footer, #navbar { position: relative; z-index: 1; }
   max-width: 940px;
   margin-top: 10px;
   padding: 8px 10px 8px 22px;
-  background: rgba(12, 12, 16, .72);
+  background: rgba(8, 13, 30, .74);
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   backdrop-filter: blur(20px) saturate(140%);
@@ -155,7 +171,7 @@ main, footer, #navbar { position: relative; z-index: 1; }
   display: grid; gap: 2px;
   margin: 0 clamp(1.25rem, 4vw, 2.5rem);
   padding: var(--s2);
-  background: rgba(12, 12, 16, .95);
+  background: rgba(8, 13, 30, .96);
   border: 1px solid var(--border); border-radius: var(--r-md);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
 }
@@ -179,13 +195,13 @@ main, footer, #navbar { position: relative; z-index: 1; }
 }
 .btn .ico { font-size: 1.05em; stroke-width: 2; }
 .btn-primary {
-  background: var(--accent); color: var(--on-accent);
-  box-shadow: 0 6px 24px rgba(var(--accent-rgb), .18);
+  background: var(--silver); color: var(--on-accent);
+  box-shadow: 0 6px 24px rgba(var(--accent-rgb), .16);
 }
 .btn-primary:hover {
-  background: var(--accent-strong);
+  background: linear-gradient(160deg, #FFFFFF 0%, #EAF0FA 34%, #B8C6DE 62%, #FFFFFF 86%, #CFDAEC 100%);
   transform: translateY(-2px);
-  box-shadow: 0 10px 32px rgba(var(--accent-rgb), .3);
+  box-shadow: 0 10px 34px rgba(var(--accent-rgb), .28);
 }
 .btn-ghost { color: var(--fg); border: 1px solid var(--border-strong); }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent-strong); transform: translateY(-2px); }
@@ -227,15 +243,16 @@ main, footer, #navbar { position: relative; z-index: 1; }
   overflow: hidden;
 }
 .hero-bg { position: absolute; inset: 0; pointer-events: none; }
-.orb { position: absolute; border-radius: 50%; filter: blur(90px); background: var(--accent); }
-.orb-1 { width: 520px; height: 520px; top: -220px; right: -120px; opacity: .13; }
-.orb-2 { width: 420px; height: 420px; bottom: -180px; left: -140px; opacity: .09; }
-.orb-3 { width: 560px; height: 560px; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: .07; position: absolute; border-radius: 50%; filter: blur(100px); background: var(--accent); pointer-events: none; }
+.orb { position: absolute; border-radius: 50%; filter: blur(90px); }
+.orb-1 { width: 560px; height: 560px; top: -230px; right: -130px; opacity: .5; background: #3B4E9E; }
+.orb-2 { width: 440px; height: 440px; bottom: -190px; left: -150px; opacity: .38; background: #6B46C1; }
+.orb-3 { width: 600px; height: 600px; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: .3;
+         position: absolute; border-radius: 50%; filter: blur(110px); background: #2E6B8C; pointer-events: none; }
 .grid-overlay {
   position: absolute; inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, .022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, .022) 1px, transparent 1px);
+    linear-gradient(rgba(190, 205, 235, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(190, 205, 235, .035) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
   -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
@@ -246,7 +263,15 @@ main, footer, #navbar { position: relative; z-index: 1; }
   font-size: clamp(2.9rem, 8.4vw, 6rem);
   font-weight: 300; letter-spacing: -.02em; line-height: 1.02;
 }
-.hero-title em { font-style: italic; color: var(--accent); font-weight: 300; }
+.hero-title em { font-style: italic; color: var(--accent-strong); font-weight: 300; }
+/* brushed-silver fill; falls back to solid silver where background-clip is unsupported */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .hero-title em, .spec-number.counting {
+    background: var(--silver);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+}
 .hero-sub {
   margin-top: var(--s4); max-width: 620px;
   font-size: clamp(1rem, 1.6vw, 1.14rem); color: var(--muted);
@@ -291,7 +316,7 @@ main, footer, #navbar { position: relative; z-index: 1; }
 .annotation-card {
   position: absolute; bottom: 9vh; left: clamp(1.25rem, 5vw, 5rem);
   z-index: 10; max-width: 380px; padding: 26px 28px;
-  background: rgba(14, 14, 18, .66);
+  background: rgba(10, 15, 34, .68);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%);
@@ -317,7 +342,7 @@ main, footer, #navbar { position: relative; z-index: 1; }
   font-size: clamp(2.4rem, 5vw, 3.6rem); font-weight: 400; color: var(--fg);
   transition: text-shadow var(--t-med);
 }
-.spec-number.counting { text-shadow: 0 0 26px rgba(var(--accent-rgb), .45); color: var(--accent-strong); }
+.spec-number.counting { filter: drop-shadow(0 0 22px rgba(var(--accent-rgb), .4)); color: var(--accent-strong); }
 .spec-label { display: block; margin-top: .35rem; font-size: .76rem; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
 
 /* ---------- services ---------- */
@@ -357,10 +382,10 @@ main, footer, #navbar { position: relative; z-index: 1; }
 .work-item:hover .browser { transform: translateY(-5px); box-shadow: 0 38px 90px rgba(0, 0, 0, .65); }
 .browser-bar {
   display: flex; align-items: center; gap: 7px;
-  padding: 10px 14px; background: rgba(255, 255, 255, .045);
+  padding: 10px 14px; background: rgba(190, 205, 235, .055);
   border-bottom: 1px solid var(--border);
 }
-.browser-bar span { width: 9px; height: 9px; border-radius: 50%; background: rgba(255, 255, 255, .17); }
+.browser-bar span { width: 9px; height: 9px; border-radius: 50%; background: rgba(190, 205, 235, .2); }
 .browser-url {
   margin-left: 10px; padding: 3px 12px;
   font-size: .68rem; color: var(--faint);

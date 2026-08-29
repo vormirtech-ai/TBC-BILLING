@@ -52,7 +52,11 @@ Everything you are likely to change is plain text in `index.html`:
 | Company facts | the `<dl class="about-facts">` block |
 
 Colours, spacing and fonts are CSS custom properties at the very top of
-`assets/css/styles.css` — change `--accent` alone and the whole site re-tints.
+`assets/css/styles.css`. The theme is a deep cosmic navy (`--bg: #020617`) with silver
+typography (`--accent: #C6D2E6`) and a brushed-metal gradient (`--silver`) used on the
+hero italic, the counters and the primary buttons. The nebula colours behind the page are
+`--neb-1/2/3`; the drifting starfield is drawn on a canvas in `assets/js/main.js`.
+Change `--accent` and `--silver` together and the whole site re-tints.
 
 ### Replacing the project screenshots
 
