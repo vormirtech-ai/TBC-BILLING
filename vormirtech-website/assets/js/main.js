@@ -192,15 +192,24 @@
         if (canvasRatio > imgRatio) { dw = cw; dh = cw / imgRatio; }
         else { dh = ch; dw = ch * imgRatio; }
       } else {
-        /* mobile: the frame is 1.95:1 but the viewport is portrait, so a plain
-           contain-fit shrinks the wordmark to a sliver. The logo occupies the
-           middle ~44% of the frame, so zoom until that fills ~88% of the width —
-           the cropped sides are empty black anyway. */
-        var zoom = 2.0;
+        /* mobile: the frame is 1.7:1 but the viewport is portrait, so a plain
+           contain-fit shrinks the wordmark. The logo spans ~74% of the frame
+           width, so zoom until it fills ~90% of the viewport. */
+        var zoom = 1.22;
         if (canvasRatio > imgRatio) { dh = ch * zoom; dw = dh * imgRatio; }
         else { dw = cw * zoom; dh = dw / imgRatio; }
       }
-      ctx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+      var dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+
+      /* Where the frame letterboxes (portrait phones), stretch its own top and
+         bottom edge rows to fill the gap. The frame then fades into the page
+         instead of ending on a hard seam, and it stays correct for every frame
+         as the background brightens through the reveal. */
+      if (dy > 0) {
+        ctx.drawImage(img, 0, 0, img.width, 2, dx, 0, dw, dy + 1);
+        ctx.drawImage(img, 0, img.height - 2, img.width, 2, dx, dy + dh - 1, dw, ch - dy - dh + 1);
+      }
+      ctx.drawImage(img, dx, dy, dw, dh);
     }
 
     function updateCards(progress) {
