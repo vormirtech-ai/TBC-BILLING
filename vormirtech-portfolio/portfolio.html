@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vormir Tech Solutions — Company Portfolio</title>
+<link rel="stylesheet" href="../vormirtech-website/assets/css/fonts.css">
+<style>
+/* ============================================================
+   Vormir Tech Solutions — printable company portfolio
+   A4 (210 x 297 mm). Dark covers, ink-friendly interior pages.
+   ============================================================ */
+@page { size: A4; margin: 0; }
+
+:root{
+  --ink:#0B1020;          /* body text            */
+  --accent:#3B4E9E;       /* nebula indigo        */
+  --accent-deep:#25326B;
+  --muted:#5A6478;
+  --hair:#D7DEEA;
+  --panel:#F2F5FA;
+  --cosmos:#020617;
+  --silver:#C6D2E6;
+  --serif:"Cormorant",Georgia,serif;
+  --sans:"Montserrat",system-ui,Arial,sans-serif;
+}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+html,body{margin:0;padding:0;background:#fff;}
+body{font-family:var(--sans);color:var(--ink);font-size:9.6pt;line-height:1.62;}
+h1,h2,h3,h4{margin:0;font-weight:500;line-height:1.12;}
+p{margin:0;}
+ul{margin:0;padding:0;list-style:none;}
+
+.page{
+  position:relative;width:210mm;height:296.8mm;overflow:hidden;
+  page-break-after:always;break-after:page;
+  padding:18mm 16mm 22mm;
+  display:flex;flex-direction:column;
+}
+.page:last-child{page-break-after:auto;break-after:auto;}
+
+/* ---------- covers ---------- */
+.cover{background:var(--cosmos);color:#fff;padding:0;display:block;}
+.cover-bg{position:absolute;inset:0;}
+.cover-bg img{width:100%;height:100%;object-fit:cover;}
+.cover-veil{position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(2,6,23,.72) 0%,rgba(2,6,23,.18) 45%,rgba(2,6,23,.86) 100%);}
+.cover-in{position:absolute;inset:0;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;text-align:center;padding:26mm 20mm;}
+.cover-logo{width:104mm;margin:0 auto;}
+.cover-rule{width:26mm;height:.5pt;background:var(--silver);opacity:.75;margin:9mm auto 7mm;}
+.cover-kicker{font-size:8.4pt;letter-spacing:.42em;text-transform:uppercase;color:var(--silver);font-weight:600;}
+.cover-sub{margin-top:5mm;font-family:var(--serif);font-size:15pt;color:#C9D3E6;letter-spacing:.02em;}
+.cover-foot{position:absolute;left:20mm;right:20mm;bottom:16mm;text-align:center;
+  font-size:8pt;letter-spacing:.14em;text-transform:uppercase;color:#93A0B8;}
+.cover-foot strong{color:#D9E1F0;font-weight:500;}
+
+/* ---------- interior furniture ---------- */
+.eyebrow{display:flex;align-items:center;gap:2.4mm;
+  font-size:7.4pt;font-weight:700;letter-spacing:.26em;text-transform:uppercase;color:var(--accent);}
+.eyebrow::before{content:"";width:7mm;height:1.4pt;background:var(--accent);display:block;}
+.page-title{font-family:var(--serif);font-size:25pt;font-weight:500;margin-top:4mm;letter-spacing:-.01em;}
+.page-lede{margin-top:3.5mm;font-size:10pt;color:var(--muted);max-width:150mm;}
+.foot{position:absolute;left:16mm;right:16mm;bottom:10mm;
+  display:flex;justify-content:space-between;align-items:center;
+  padding-top:2.5mm;border-top:.5pt solid var(--hair);
+  font-size:7pt;letter-spacing:.16em;text-transform:uppercase;color:#8A93A6;}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-top:9mm;}
+.stat{background:var(--panel);border:.5pt solid var(--hair);border-radius:2.4mm;padding:6mm 4mm;text-align:center;}
+.stat-n{font-family:var(--serif);font-size:24pt;color:var(--accent-deep);line-height:1;
+  font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1;}
+.stat-l{margin-top:1.6mm;font-size:7pt;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+  min-height:7.5mm;}
+
+/* ---------- generic list of points ---------- */
+.points{margin-top:9mm;display:grid;gap:4.5mm;}
+.point{display:flex;gap:4mm;}
+.point-mark{flex:none;width:5.5mm;height:5.5mm;border-radius:50%;background:var(--accent);
+  color:#fff;font-size:7pt;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:.6mm;}
+.point h3{font-family:var(--serif);font-size:12.5pt;}
+.point p{margin-top:1mm;font-size:9.2pt;color:var(--muted);}
+
+/* ---------- services ---------- */
+.svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6mm 7mm;margin-top:10mm;}
+.svc{border-top:1pt solid var(--accent);padding-top:4mm;}
+.svc p.svc-n{font-size:7.4pt;font-weight:700;letter-spacing:.2em;color:var(--accent);margin-top:0;}
+.svc h3{font-family:var(--serif);font-size:14pt;margin-top:1.5mm;}
+.svc p{margin-top:2mm;font-size:9pt;color:var(--muted);}
+.tags{display:flex;flex-wrap:wrap;gap:1.6mm;margin-top:3mm;}
+.tags li{font-size:7pt;letter-spacing:.05em;color:var(--accent-deep);
+  background:var(--panel);border:.5pt solid var(--hair);border-radius:6mm;padding:.9mm 2.6mm;}
+
+/* ---------- work ---------- */
+.shot{margin-top:8mm;border:.5pt solid var(--hair);border-radius:2.4mm;overflow:hidden;
+  box-shadow:0 1.4mm 4mm rgba(11,16,32,.10);}
+.shot-bar{display:flex;align-items:center;gap:1.6mm;padding:2.2mm 3.5mm;background:var(--panel);
+  border-bottom:.5pt solid var(--hair);}
+.shot-bar i{width:2mm;height:2mm;border-radius:50%;background:#C4CCDA;display:block;}
+.shot-bar span{margin-left:2mm;font-size:6.8pt;letter-spacing:.08em;color:var(--muted);}
+.shot svg{display:block;width:100%;height:auto;}
+.work-meta{display:grid;grid-template-columns:1fr 1fr;gap:7mm;margin-top:8mm;}
+.work-meta h3{font-size:7.4pt;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);}
+.checks{margin-top:3mm;display:grid;gap:2.2mm;}
+.checks li{position:relative;padding-left:5mm;font-size:9pt;color:var(--muted);}
+.checks li::before{content:"";position:absolute;left:0;top:1.6mm;width:2mm;height:2mm;
+  border-radius:50%;background:var(--accent);}
+.spec-row{margin-top:3mm;display:grid;gap:2.2mm;}
+.spec-row div{display:flex;justify-content:space-between;gap:4mm;font-size:8.6pt;
+  padding-bottom:1.6mm;border-bottom:.5pt solid var(--hair);}
+.spec-row dt{color:var(--muted);}
+.spec-row dd{margin:0;text-align:right;color:var(--ink);font-weight:500;}
+
+/* ---------- process ---------- */
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:6mm 7mm;margin-top:10mm;}
+.step{background:var(--panel);border:.5pt solid var(--hair);border-radius:2.4mm;padding:6mm;}
+.step p.step-n{font-family:var(--serif);font-size:20pt;color:var(--accent);line-height:1;
+  font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1;}
+.step h3{font-family:var(--serif);font-size:13pt;margin-top:2mm;}
+.step p{margin-top:2mm;font-size:8.8pt;color:var(--muted);}
+.engage{margin-top:9mm;padding-top:6mm;border-top:.5pt solid var(--hair);}
+.engage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm;margin-top:5mm;}
+.engage-grid h3{font-family:var(--serif);font-size:12.5pt;}
+.engage-grid p{margin-top:1.5mm;font-size:8.6pt;color:var(--muted);}
+
+/* ---------- closing strips ---------- */
+.strip{margin-top:auto;padding-top:6mm;border-top:.5pt solid var(--hair);}
+.strip .eyebrow{margin-bottom:4mm;}
+.strip-items{display:flex;flex-wrap:wrap;gap:2mm;}
+.strip-items li{font-size:8pt;color:var(--accent-deep);background:var(--panel);
+  border:.5pt solid var(--hair);border-radius:6mm;padding:1.4mm 3.4mm;}
+.strip-note{font-size:9pt;color:var(--muted);max-width:160mm;}
+
+/* ---------- back cover ---------- */
+.back-in{position:absolute;inset:0;display:flex;flex-direction:column;
+  justify-content:flex-start;padding:62mm 22mm 20mm;text-align:left;}
+.back-title{font-family:var(--serif);font-size:30pt;color:#fff;font-weight:400;line-height:1.06;}
+.back-lede{margin-top:5mm;font-size:10pt;color:#AFBBD0;max-width:120mm;}
+.contact{margin-top:12mm;display:grid;grid-template-columns:1fr 1fr;gap:8mm 10mm;}
+.contact h3{font-size:7.4pt;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--silver);}
+.contact p{margin-top:2mm;font-family:var(--serif);font-size:16pt;color:#fff;
+  font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1;}
+.contact small{display:block;margin-top:1mm;font-size:8pt;color:#93A0B8;font-family:var(--sans);}
+.back-rule{margin-top:auto;height:.5pt;background:rgba(198,210,230,.3);}
+.back-foot{margin-top:6mm;display:flex;justify-content:space-between;align-items:flex-end;}
+.back-foot img{width:52mm;opacity:.95;}
+.back-foot span{font-size:7.4pt;letter-spacing:.18em;text-transform:uppercase;color:#8B98B0;}
+</style>
+</head>
+<body>
+
+<!-- ============ 1. COVER ============ -->
+<section class="page cover">
+  <div class="cover-bg">
+    <img src="../vormirtech-website/assets/frames/frame_0009.jpg" alt="">
+    <div class="cover-veil"></div>
+  </div>
+  <div class="cover-in">
+    <img class="cover-logo" src="../vormirtech-website/assets/logo.png" alt="Vormir Tech Solutions">
+    <div class="cover-rule"></div>
+    <p class="cover-kicker">Company Portfolio</p>
+    <p class="cover-sub">Software · Web Applications · Digital Marketing</p>
+  </div>
+  <p class="cover-foot"><strong>Nagpur, Maharashtra, India</strong> &nbsp;·&nbsp; +91 92264 06057 &nbsp;·&nbsp; +91 98345 23160</p>
+</section>
+
+<!-- ============ 2. WHO WE ARE ============ -->
+<section class="page">
+  <p class="eyebrow">Who we are</p>
+  <h1 class="page-title">A studio for businesses that<br>need both halves</h1>
+  <p class="page-lede">Vormir Tech Solutions started with a simple observation: a business rarely needs only software or only marketing. It needs a system that runs the operation, and a way to bring customers to it — and it needs one team accountable for both.</p>
+  <p class="page-lede">So that is what we built. Seven-plus businesses now run on work we designed, wrote, deployed and trained their staff on. When something breaks at nine at night, you call the people who built it.</p>
+
+  <div class="stats">
+    <div class="stat"><p class="stat-n">7+</p><p class="stat-l">Happy clients</p></div>
+    <div class="stat"><p class="stat-n">6</p><p class="stat-l">Service lines</p></div>
+    <div class="stat"><p class="stat-n">2</p><p class="stat-l">Flagship products</p></div>
+    <div class="stat"><p class="stat-n">100%</p><p class="stat-l">Built in-house</p></div>
+  </div>
+
+  <div class="points">
+    <div class="point"><span class="point-mark">1</span><div>
+      <h3>Offline-first where it matters</h3>
+      <p>A billing counter cannot stop because the connection did. Our products keep working when the internet does not, and reconcile when it returns.</p></div></div>
+    <div class="point"><span class="point-mark">2</span><div>
+      <h3>You own what we build</h3>
+      <p>Your data stays on your machines. No per-seat rent for software you already paid to have built, and no vendor holding your operation hostage.</p></div></div>
+    <div class="point"><span class="point-mark">3</span><div>
+      <h3>Trained, not just handed over</h3>
+      <p>We train your staff until they are faster with the software than without it. Software nobody knows how to use is an expense, not an asset.</p></div></div>
+    <div class="point"><span class="point-mark">4</span><div>
+      <h3>One team, one number to call</h3>
+      <p>Design, engineering, deployment, training and marketing under one roof — no agency-to-vendor handoffs, and no one to point at when something goes wrong.</p></div></div>
+  </div>
+
+  <div class="strip">
+    <p class="eyebrow">Sectors we work with</p>
+    <ul class="strip-items">
+      <li>Cafes &amp; restaurants</li><li>Real estate &amp; construction</li>
+      <li>Retail &amp; counter businesses</li><li>Professional services</li>
+    </ul>
+  </div>
+  <div class="foot"><span>Vormir Tech Solutions — Company Portfolio</span><span>02</span></div>
+</section>
+
+<!-- ============ 3. SERVICES ============ -->
+<section class="page">
+  <p class="eyebrow">What we do</p>
+  <h1 class="page-title">Six ways we move your business</h1>
+  <p class="page-lede">Most agencies market what someone else built. Most software shops build and disappear. We do both, so the product and the demand for it are designed together.</p>
+
+  <div class="svc-grid">
+    <div class="svc"><p class="svc-n">01</p><h3>Digital Marketing</h3>
+      <p>Search, social and paid campaigns built around what actually converts — plus local visibility for businesses selling in and around Nagpur.</p>
+      <ul class="tags"><li>SEO</li><li>Social media</li><li>Paid ads</li><li>Local listings</li></ul></div>
+
+    <div class="svc"><p class="svc-n">02</p><h3>Custom Software Development</h3>
+      <p>Purpose-built systems for how your business actually runs — billing counters, ERP, inventory, CRM — including offline-first desktop software.</p>
+      <ul class="tags"><li>POS &amp; billing</li><li>ERP / CRM</li><li>Offline-first</li><li>Reporting</li></ul></div>
+
+    <div class="svc"><p class="svc-n">03</p><h3>Web Application Development</h3>
+      <p>Dashboards, portals and customer-facing web apps that stay fast on a mid-range phone and a shop counter tablet alike.</p>
+      <ul class="tags"><li>Dashboards</li><li>Portals</li><li>PWA</li><li>Integrations</li></ul></div>
+
+    <div class="svc"><p class="svc-n">04</p><h3>IT Services</h3>
+      <p>Setup, deployment, backups and ongoing maintenance — the unglamorous work that keeps a shop floor or a site office running.</p>
+      <ul class="tags"><li>Deployment</li><li>Maintenance</li><li>Backups</li><li>Support</li></ul></div>
+
+    <div class="svc"><p class="svc-n">05</p><h3>Product Training</h3>
+      <p>Your staff trained on the software until they are faster with it than without it, with documentation they will actually open.</p>
+      <ul class="tags"><li>Staff onboarding</li><li>Manuals</li><li>Handover</li><li>Refreshers</li></ul></div>
+
+    <div class="svc"><p class="svc-n">06</p><h3>Content Creation &amp; Editing</h3>
+      <p>Video, photography and copy produced and edited in-house — brand films, product shoots, reels and the assets your campaigns run on.</p>
+      <ul class="tags"><li>Video editing</li><li>Photography</li><li>Reels</li><li>Copywriting</li></ul></div>
+  </div>
+
+  <div class="foot"><span>Vormir Tech Solutions — Company Portfolio</span><span>03</span></div>
+</section>
+
+<!-- ============ 4. WORK — CAFE ============ -->
+<section class="page">
+  <p class="eyebrow">Selected work · 01</p>
+  <h1 class="page-title">The Baruch Cafe — Billing Counter</h1>
+  <p class="page-lede">A complete counter-to-kitchen billing system for a working cafe. The team rings up a 142-item menu, fires tickets to the kitchen, tracks twenty QR-coded tables, settles bills and closes the day — on one screen, without waiting for the internet.</p>
+
+  <div class="shot">
+    <div class="shot-bar"><i></i><i></i><i></i><span>The Baruch Cafe · Billing Counter</span></div>
+    <svg class="work-shot" viewBox="0 0 800 470" role="img" aria-label="Screenshot of The Baruch Cafe billing counter: menu grid on the left, current order panel on the right.">
+            <rect width="800" height="470" fill="#F7F2EA"/>
+            <rect width="800" height="46" fill="#1D1714"/>
+            <circle cx="26" cy="23" r="11" fill="#F7F2EA"/><text x="26" y="27" font-size="9" fill="#1D1714" text-anchor="middle" font-family="serif">V</text>
+            <text x="48" y="21" font-size="12" fill="#F7F2EA" font-family="serif">The Baruch Cafe</text>
+            <text x="48" y="34" font-size="7" fill="#B9AFA3" letter-spacing="1.5">BILLING COUNTER</text>
+            <rect x="168" y="10" width="58" height="26" rx="13" fill="#F7F2EA"/><text x="197" y="27" font-size="9" fill="#1D1714" text-anchor="middle">Counter</text>
+            <rect x="232" y="10" width="66" height="26" rx="13" fill="#8C1D3F"/><text x="259" y="27" font-size="9" fill="#fff" text-anchor="middle">Orders</text><circle cx="288" cy="23" r="7" fill="#fff"/><text x="288" y="26" font-size="8" fill="#8C1D3F" text-anchor="middle">1</text>
+            <text x="318" y="27" font-size="9" fill="#CFC6BA">Tables</text><text x="366" y="27" font-size="9" fill="#CFC6BA">Customers</text><text x="432" y="27" font-size="9" fill="#CFC6BA">Bills</text><text x="470" y="27" font-size="9" fill="#CFC6BA">Dashboard</text><text x="534" y="27" font-size="9" fill="#CFC6BA">Stock</text><text x="574" y="27" font-size="9" fill="#CFC6BA">Staff</text>
+            <rect x="700" y="10" width="88" height="26" rx="6" fill="#2C2320"/><text x="744" y="27" font-size="9" fill="#F7F2EA" text-anchor="middle">Manager</text>
+            <rect x="20" y="62" width="420" height="30" rx="8" fill="#fff" stroke="#E2D9CC"/><text x="34" y="82" font-size="10" fill="#A0968A">Search the menu…</text>
+            <rect x="452" y="62" width="86" height="30" rx="8" fill="#fff" stroke="#E2D9CC"/><text x="495" y="82" font-size="9" fill="#4A403A" text-anchor="middle">Order board</text>
+            <g font-size="9" text-anchor="middle">
+              <rect x="20" y="104" width="42" height="24" rx="12" fill="#1D1714"/><text x="41" y="120" fill="#fff">All</text>
+              <rect x="68" y="104" width="46" height="24" rx="12" fill="#fff" stroke="#E2D9CC"/><text x="91" y="120" fill="#4A403A">Hot</text>
+              <rect x="120" y="104" width="50" height="24" rx="12" fill="#fff" stroke="#E2D9CC"/><text x="145" y="120" fill="#4A403A">Iced</text>
+              <rect x="176" y="104" width="66" height="24" rx="12" fill="#fff" stroke="#E2D9CC"/><text x="209" y="120" fill="#4A403A">Frappe's</text>
+              <rect x="248" y="104" width="96" height="24" rx="12" fill="#fff" stroke="#E2D9CC"/><text x="296" y="120" fill="#4A403A">Non-Coffee</text>
+              <rect x="350" y="104" width="88" height="24" rx="12" fill="#fff" stroke="#E2D9CC"/><text x="394" y="120" fill="#4A403A">TBC Specials</text>
+              <rect x="444" y="104" width="76" height="24" rx="12" fill="#fff" stroke="#E2D9CC"/><text x="482" y="120" fill="#4A403A">Pizza (Veg)</text>
+            </g>
+            <text x="20" y="150" font-size="8" fill="#A0968A" letter-spacing="1">142 ITEMS</text>
+            <g>
+              <rect x="20" y="160" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="32" y="180" font-size="6.5" fill="#A0968A" letter-spacing="1">HOT</text><text x="32" y="196" font-size="11" fill="#241C18">Espresso</text><text x="32" y="220" font-size="11" fill="#8C1D3F">₹140.00</text>
+              <rect x="146" y="160" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="158" y="180" font-size="6.5" fill="#A0968A" letter-spacing="1">HOT</text><text x="158" y="196" font-size="11" fill="#241C18">Americano</text><text x="158" y="220" font-size="11" fill="#8C1D3F">₹170.00</text>
+              <rect x="272" y="160" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="284" y="180" font-size="6.5" fill="#A0968A" letter-spacing="1">HOT</text><text x="284" y="196" font-size="11" fill="#241C18">Cappuccino</text><text x="284" y="220" font-size="11" fill="#8C1D3F">₹180.00</text>
+              <rect x="398" y="160" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="410" y="180" font-size="6.5" fill="#A0968A" letter-spacing="1">HOT</text><text x="410" y="196" font-size="11" fill="#241C18">Latte</text><text x="410" y="220" font-size="11" fill="#8C1D3F">₹180.00</text>
+              <rect x="20" y="244" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="32" y="264" font-size="6.5" fill="#A0968A" letter-spacing="1">ICED</text><text x="32" y="280" font-size="11" fill="#241C18">Iced Latte</text><text x="32" y="304" font-size="11" fill="#8C1D3F">₹210.00</text>
+              <rect x="146" y="244" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="158" y="264" font-size="6.5" fill="#A0968A" letter-spacing="1">ICED</text><text x="158" y="280" font-size="11" fill="#241C18">Iced Mocha</text><text x="158" y="304" font-size="11" fill="#8C1D3F">₹220.00</text>
+              <rect x="272" y="244" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="284" y="264" font-size="6.5" fill="#A0968A" letter-spacing="1">ICED</text><text x="284" y="280" font-size="11" fill="#241C18">Affogato</text><text x="284" y="304" font-size="11" fill="#8C1D3F">₹180.00</text>
+              <rect x="398" y="244" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="410" y="264" font-size="6.5" fill="#A0968A" letter-spacing="1">ICED</text><text x="410" y="280" font-size="11" fill="#241C18">Spanish Latte</text><text x="410" y="304" font-size="11" fill="#8C1D3F">₹230.00</text>
+              <rect x="20" y="328" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="32" y="348" font-size="6.5" fill="#A0968A" letter-spacing="1">FRAPPE'S</text><text x="32" y="364" font-size="11" fill="#241C18">Classic</text><text x="32" y="388" font-size="11" fill="#8C1D3F">₹240.00</text>
+              <rect x="146" y="328" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="158" y="348" font-size="6.5" fill="#A0968A" letter-spacing="1">FRAPPE'S</text><text x="158" y="364" font-size="11" fill="#241C18">Mocha</text><text x="158" y="388" font-size="11" fill="#8C1D3F">₹260.00</text>
+              <rect x="272" y="328" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="284" y="348" font-size="6.5" fill="#A0968A" letter-spacing="1">PIZZA</text><text x="284" y="364" font-size="11" fill="#241C18">Margherita</text><text x="284" y="388" font-size="11" fill="#8C1D3F">₹320.00</text>
+              <rect x="398" y="328" width="118" height="74" rx="10" fill="#fff" stroke="#E7DFD3"/><text x="410" y="348" font-size="6.5" fill="#A0968A" letter-spacing="1">PIZZA</text><text x="410" y="364" font-size="11" fill="#241C18">Farmhouse</text><text x="410" y="388" font-size="11" fill="#8C1D3F">₹380.00</text>
+            </g>
+            <rect x="530" y="46" width="270" height="424" fill="#fff"/>
+            <line x1="530" y1="46" x2="530" y2="470" stroke="#E7DFD3"/>
+            <text x="548" y="76" font-size="13" fill="#241C18" font-family="serif">Current order</text>
+            <rect x="726" y="62" width="56" height="24" rx="6" fill="#fff" stroke="#E2D9CC"/><text x="754" y="78" font-size="9" fill="#4A403A" text-anchor="middle">Clear</text>
+            <rect x="548" y="100" width="234" height="52" rx="8" fill="#FBF7F1"/>
+            <text x="566" y="122" font-size="10" fill="#241C18">2 × Cappuccino</text><text x="764" y="122" font-size="10" fill="#241C18" text-anchor="end">₹360.00</text>
+            <text x="566" y="140" font-size="10" fill="#241C18">1 × Iced Latte</text><text x="764" y="140" font-size="10" fill="#241C18" text-anchor="end">₹210.00</text>
+            <rect x="548" y="166" width="234" height="30" rx="8" fill="#fff" stroke="#E2D9CC"/><text x="665" y="186" font-size="10" fill="#4A403A" text-anchor="middle">Assign a table</text>
+            <rect x="548" y="204" width="234" height="30" rx="8" fill="#fff" stroke="#E2D9CC"/><text x="665" y="224" font-size="10" fill="#4A403A" text-anchor="middle">Attach a customer</text>
+            <rect x="548" y="242" width="234" height="30" rx="8" fill="#fff" stroke="#E2D9CC"/><text x="665" y="262" font-size="10" fill="#4A403A" text-anchor="middle">Send to kitchen</text>
+            <line x1="548" y1="292" x2="782" y2="292" stroke="#EFE7DB"/>
+            <text x="548" y="314" font-size="10" fill="#8A8078">Subtotal</text><text x="782" y="314" font-size="10" fill="#4A403A" text-anchor="end">₹570.00</text>
+            <text x="548" y="334" font-size="10" fill="#8A8078">GST</text><text x="782" y="334" font-size="10" fill="#4A403A" text-anchor="end">₹28.50</text>
+            <text x="548" y="366" font-size="13" fill="#241C18" font-family="serif">Total</text><text x="782" y="368" font-size="19" fill="#241C18" text-anchor="end" font-family="serif">₹598.50</text>
+            <rect x="548" y="392" width="234" height="42" rx="10" fill="#7E9B84"/><text x="665" y="418" font-size="12" fill="#fff" text-anchor="middle">Take payment</text>
+          </svg>
+  </div>
+
+  <div class="work-meta">
+    <div>
+      <h3>What it covers</h3>
+      <ul class="checks">
+        <li>142-item menu with instant search and category filters</li>
+        <li>20 tables with printable QR cards and live status</li>
+        <li>Kitchen order board, customers, bills and discounts</li>
+        <li>Stock, staff rota and a day-close dashboard</li>
+      </ul>
+    </div>
+    <div>
+      <h3>At a glance</h3>
+      <dl class="spec-row">
+        <div><dt>Sector</dt><dd>Food &amp; beverage</dd></div>
+        <div><dt>Type</dt><dd>Billing &amp; POS web app</dd></div>
+        <div><dt>Connectivity</dt><dd>Offline-capable</dd></div>
+        <div><dt>Deployment</dt><dd>Shared counter mode</dd></div>
+        <div><dt>Status</dt><dd>In daily operational use</dd></div>
+      </dl>
+    </div>
+  </div>
+
+  <div class="strip">
+    <p class="eyebrow">Screens in the system</p>
+    <ul class="strip-items">
+      <li>Counter</li><li>Orders</li><li>Tables</li><li>Customers</li>
+      <li>Bills</li><li>Dashboard</li><li>Stock</li><li>Staff</li>
+    </ul>
+  </div>
+  <div class="foot"><span>Vormir Tech Solutions — Company Portfolio</span><span>04</span></div>
+</section>
+
+<!-- ============ 5. WORK — REAL ESTATE ============ -->
+<section class="page">
+  <p class="eyebrow">Selected work · 02</p>
+  <h1 class="page-title">Real-Estate ERP — Offline Desktop Suite</h1>
+  <p class="page-lede">One offline application covering the whole developer workflow — the enquiry that walks in, the unit it becomes, the site that builds it and the labour that shows up. It runs on site-office machines with no internet connection and no monthly SaaS bill.</p>
+
+  <div class="shot">
+    <div class="shot-bar"><i></i><i></i><i></i><span>Desktop application · runs offline</span></div>
+    <svg class="work-shot" viewBox="0 0 800 470" role="img" aria-label="Screenshot of the real-estate ERP dashboard: sidebar navigation, KPI tiles for leads, clients and revenue, plus sales trend, lead funnel and labour attendance charts.">
+            <rect width="800" height="470" fill="#F7F8FA"/>
+            <rect width="196" height="470" fill="#fff"/><line x1="196" y1="0" x2="196" y2="470" stroke="#E6E9EE"/>
+            <text x="22" y="30" font-size="7" fill="#98A0AC" letter-spacing="1.4">OVERVIEW</text>
+            <rect x="14" y="40" width="168" height="30" rx="8" fill="#FDECEE"/><text x="34" y="60" font-size="10" fill="#D31E36">Dashboard</text>
+            <text x="22" y="92" font-size="7" fill="#98A0AC" letter-spacing="1.4">CRM</text>
+            <text x="34" y="114" font-size="10" fill="#48505C">Leads</text><text x="34" y="140" font-size="10" fill="#48505C">Clients</text>
+            <text x="22" y="168" font-size="7" fill="#98A0AC" letter-spacing="1.4">CONSTRUCTION</text>
+            <text x="34" y="190" font-size="10" fill="#48505C">Projects</text><text x="34" y="214" font-size="10" fill="#48505C">Properties</text>
+            <text x="34" y="238" font-size="10" fill="#48505C">Inventory</text><text x="34" y="262" font-size="10" fill="#48505C">Labour</text>
+            <text x="34" y="286" font-size="10" fill="#48505C">DPR</text>
+            <text x="22" y="314" font-size="7" fill="#98A0AC" letter-spacing="1.4">INSIGHTS</text>
+            <text x="34" y="336" font-size="10" fill="#48505C">Reports</text><text x="34" y="360" font-size="10" fill="#48505C">Forecasting</text>
+            <text x="222" y="42" font-size="19" fill="#1A1F27" font-family="serif">Dashboard</text>
+            <text x="222" y="60" font-size="9" fill="#7A828E">Sales, sites, stock and labour at a glance.</text>
+            <rect x="618" y="26" width="76" height="30" rx="8" fill="#fff" stroke="#E1E5EB"/><text x="656" y="45" font-size="9" fill="#48505C" text-anchor="middle">Reports</text>
+            <rect x="702" y="26" width="82" height="30" rx="8" fill="#C41230"/><text x="743" y="45" font-size="9" fill="#fff" text-anchor="middle">Forecast</text>
+            <g>
+              <rect x="222" y="76" width="132" height="76" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="238" y="98" font-size="7" fill="#8A929E" letter-spacing="0.8">TOTAL LEADS</text><text x="238" y="126" font-size="22" fill="#1A1F27" font-family="serif">64</text><text x="238" y="142" font-size="7.5" fill="#8A929E">59 still open</text><circle cx="332" cy="98" r="12" fill="#FDECEE"/>
+              <rect x="366" y="76" width="132" height="76" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="382" y="98" font-size="7" fill="#8A929E" letter-spacing="0.8">ACTIVE CLIENTS</text><text x="382" y="126" font-size="22" fill="#1A1F27" font-family="serif">28</text><text x="382" y="142" font-size="7.5" fill="#8A929E">3 leads won</text><circle cx="476" cy="98" r="12" fill="#EAF6EF"/>
+              <rect x="510" y="76" width="132" height="76" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="526" y="98" font-size="7" fill="#8A929E" letter-spacing="0.8">MONTHLY REVENUE</text><text x="526" y="126" font-size="22" fill="#1A1F27" font-family="serif">₹1.36 Cr</text><text x="526" y="142" font-size="7.5" fill="#2E9E5B">↗ 17.0% collections</text><circle cx="620" cy="98" r="12" fill="#FDECEE"/>
+              <rect x="654" y="76" width="130" height="76" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="670" y="98" font-size="7" fill="#8A929E" letter-spacing="0.8">PROGRESS</text><text x="670" y="126" font-size="22" fill="#1A1F27" font-family="serif">49.4%</text><text x="670" y="142" font-size="7.5" fill="#8A929E">2 active projects</text><circle cx="762" cy="98" r="12" fill="#FDF4E6"/>
+              <rect x="222" y="164" width="132" height="64" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="238" y="184" font-size="7" fill="#8A929E" letter-spacing="0.8">AVAILABLE UNITS</text><text x="238" y="212" font-size="20" fill="#1A1F27" font-family="serif">52</text>
+              <rect x="366" y="164" width="132" height="64" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="382" y="184" font-size="7" fill="#8A929E" letter-spacing="0.8">ATTENDANCE</text><text x="382" y="212" font-size="20" fill="#1A1F27" font-family="serif">86</text>
+              <rect x="510" y="164" width="132" height="64" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="526" y="184" font-size="7" fill="#8A929E" letter-spacing="0.8">MATERIAL USED</text><text x="526" y="212" font-size="20" fill="#1A1F27" font-family="serif">₹2.4 L</text>
+              <rect x="654" y="164" width="130" height="64" rx="10" fill="#fff" stroke="#E6E9EE"/><text x="670" y="184" font-size="7" fill="#8A929E" letter-spacing="0.8">NEEDS ATTENTION</text><text x="670" y="212" font-size="20" fill="#C41230" font-family="serif">20</text>
+            </g>
+            <rect x="222" y="240" width="180" height="212" rx="10" fill="#fff" stroke="#E6E9EE"/>
+            <text x="238" y="262" font-size="10" fill="#1A1F27" font-family="serif">Sales trend</text><text x="238" y="277" font-size="7" fill="#8A929E">Last 12 months</text>
+            <polyline points="238,420 262,406 286,412 310,372 334,388 358,330 382,300" fill="none" stroke="#C41230" stroke-width="2.5"/>
+            <polyline points="238,432 262,424 286,428 310,404 334,414 358,382 382,362" fill="none" stroke="#E9B0BB" stroke-width="2"/>
+            <line x1="238" y1="440" x2="386" y2="440" stroke="#EDF0F4"/>
+            <rect x="414" y="240" width="180" height="212" rx="10" fill="#fff" stroke="#E6E9EE"/>
+            <text x="430" y="262" font-size="10" fill="#1A1F27" font-family="serif">Lead funnel</text><text x="430" y="277" font-size="7" fill="#8A929E">Where every enquiry stands</text>
+            <g font-size="7" fill="#8A929E">
+              <text x="430" y="303">New</text><rect x="466" y="294" width="112" height="12" rx="3" fill="#C41230"/>
+              <text x="430" y="327">Contacted</text><rect x="466" y="318" width="80" height="12" rx="3" fill="#E24358"/>
+              <text x="430" y="351">Interested</text><rect x="466" y="342" width="62" height="12" rx="3" fill="#8A929E"/>
+              <text x="430" y="375">Site visit</text><rect x="466" y="366" width="88" height="12" rx="3" fill="#EE8095"/>
+              <text x="430" y="399">Negotiation</text><rect x="466" y="390" width="46" height="12" rx="3" fill="#B8BFC9"/>
+              <text x="430" y="423">Won</text><rect x="466" y="414" width="34" height="12" rx="3" fill="#2E9E5B"/>
+            </g>
+            <rect x="606" y="240" width="178" height="212" rx="10" fill="#fff" stroke="#E6E9EE"/>
+            <text x="622" y="262" font-size="10" fill="#1A1F27" font-family="serif">Labour attendance</text><text x="622" y="277" font-size="7" fill="#8A929E">Present · half day · absent</text>
+            <g>
+              <rect x="624" y="382" width="12" height="52" fill="#C41230"/><rect x="624" y="368" width="12" height="14" fill="#C8CDD5"/>
+              <rect x="642" y="392" width="12" height="42" fill="#C41230"/><rect x="642" y="380" width="12" height="12" fill="#C8CDD5"/>
+              <rect x="660" y="374" width="12" height="60" fill="#C41230"/><rect x="660" y="360" width="12" height="14" fill="#C8CDD5"/>
+              <rect x="678" y="398" width="12" height="36" fill="#C41230"/><rect x="678" y="386" width="12" height="12" fill="#C8CDD5"/>
+              <rect x="696" y="366" width="12" height="68" fill="#C41230"/><rect x="696" y="354" width="12" height="12" fill="#C8CDD5"/>
+              <rect x="714" y="386" width="12" height="48" fill="#C41230"/><rect x="714" y="372" width="12" height="14" fill="#C8CDD5"/>
+              <rect x="732" y="358" width="12" height="76" fill="#C41230"/><rect x="732" y="344" width="12" height="14" fill="#C8CDD5"/>
+              <rect x="750" y="378" width="12" height="56" fill="#C41230"/><rect x="750" y="366" width="12" height="12" fill="#C8CDD5"/>
+              <line x1="622" y1="434" x2="770" y2="434" stroke="#EDF0F4"/>
+            </g>
+          </svg>
+  </div>
+
+  <div class="work-meta">
+    <div>
+      <h3>What it covers</h3>
+      <ul class="checks">
+        <li>Leads and clients with a full enquiry-to-booking funnel</li>
+        <li>Projects, properties and unit inventory with availability</li>
+        <li>Labour attendance, material issue and daily progress reports</li>
+        <li>Collections dashboard, reports and revenue forecasting</li>
+      </ul>
+    </div>
+    <div>
+      <h3>At a glance</h3>
+      <dl class="spec-row">
+        <div><dt>Sector</dt><dd>Real estate &amp; construction</dd></div>
+        <div><dt>Type</dt><dd>ERP / CRM desktop suite</dd></div>
+        <div><dt>Connectivity</dt><dd>Fully offline</dd></div>
+        <div><dt>Data</dt><dd>Private, on your machine</dd></div>
+        <div><dt>Status</dt><dd>In daily operational use</dd></div>
+      </dl>
+    </div>
+  </div>
+
+  <div class="strip">
+    <p class="eyebrow">Modules in the suite</p>
+    <ul class="strip-items">
+      <li>Dashboard</li><li>Leads</li><li>Clients</li><li>Projects</li><li>Properties</li>
+      <li>Inventory</li><li>Labour</li><li>DPR</li><li>Reports</li><li>Forecasting</li>
+    </ul>
+  </div>
+  <div class="foot"><span>Vormir Tech Solutions — Company Portfolio</span><span>05</span></div>
+</section>
+
+<!-- ============ 6. PROCESS ============ -->
+<section class="page">
+  <p class="eyebrow">How we work</p>
+  <h1 class="page-title">Four steps, no surprises</h1>
+  <p class="page-lede">You always know what is being built, what it costs and when it lands.</p>
+
+  <div class="steps">
+    <div class="step"><p class="step-n">01</p><h3>Understand</h3>
+      <p>We sit with the people who will use the thing — the cashier, the site engineer, the sales desk — and map how the work actually happens today.</p></div>
+    <div class="step"><p class="step-n">02</p><h3>Design</h3>
+      <p>Screens, flows and a fixed scope you sign off before a line of code is written. No moving targets, no surprise invoices.</p></div>
+    <div class="step"><p class="step-n">03</p><h3>Build</h3>
+      <p>Short cycles with something you can click at the end of each one. You see progress weekly, not at the end.</p></div>
+    <div class="step"><p class="step-n">04</p><h3>Launch &amp; train</h3>
+      <p>We install it, train your staff on it and stay reachable afterwards. Then we market it, if that is part of the brief.</p></div>
+  </div>
+
+  <div class="engage">
+    <p class="eyebrow">Ways to engage</p>
+    <div class="engage-grid">
+      <div><h3>Project</h3><p>A defined scope, a fixed price and a delivery date. Best for a first system or a clear, bounded build.</p></div>
+      <div><h3>Retainer</h3><p>Ongoing development, marketing and support on a monthly basis, for businesses that keep evolving.</p></div>
+      <div><h3>Build &amp; train</h3><p>We build it, train your team and hand over completely. You run it in-house from there.</p></div>
+    </div>
+  </div>
+
+  <div class="strip">
+    <p class="eyebrow">What you get at handover</p>
+    <p class="strip-note">A working system installed where it is used, your staff trained on it, written documentation, and a direct line to the people who built it.</p>
+  </div>
+  <div class="foot"><span>Vormir Tech Solutions — Company Portfolio</span><span>06</span></div>
+</section>
+
+<!-- ============ 7. BACK COVER / CONTACT ============ -->
+<section class="page cover">
+  <div class="cover-bg">
+    <img src="../vormirtech-website/assets/frames/frame_0005.jpg" alt="">
+    <div class="cover-veil"></div>
+  </div>
+  <div class="back-in">
+    <h2 class="back-title">Tell us what you<br>are trying to fix.</h2>
+    <p class="back-lede">A counter that is slow, a site office drowning in registers, a business nobody can find online. Call us and describe it — the first conversation is free and specific.</p>
+
+    <div class="contact">
+      <div><h3>Call us</h3><p>+91 92264 06057</p><small>Mon–Sat, 10:00–19:00 IST</small></div>
+      <div><h3>Alternate line</h3><p>+91 98345 23160</p><small>Also on WhatsApp</small></div>
+      <div><h3>Email</h3><p>vormirtech@gmail.com</p><small>Send a brief, we reply with a plan</small></div>
+      <div><h3>Where we are</h3><p>Nagpur, Maharashtra</p><small>Working with clients across India</small></div>
+    </div>
+
+    <div class="back-rule"></div>
+    <div class="back-foot">
+      <img src="../vormirtech-website/assets/logo.png" alt="Vormir Tech Solutions">
+      <span>Software · Web Apps · Digital Marketing</span>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
