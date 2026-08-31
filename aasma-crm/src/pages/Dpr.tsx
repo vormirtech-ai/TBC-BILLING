@@ -24,6 +24,7 @@ import { SimpleSelect } from '@/components/ui/select';
 import { Skeleton, Switch } from '@/components/ui/misc';
 import { useResource } from '@/hooks/useResource';
 import { ApiError, api, downloadFile } from '@/lib/api';
+import { fileUrl } from '@/lib/files';
 import { dateInput, formatDate, number, today } from '@/lib/format';
 import { WEATHER_OPTIONS, humanize } from '@shared/constants';
 import { dprSchema, type DprInput } from '@shared/schemas';
@@ -307,13 +308,13 @@ export function DprPage(): JSX.Element {
                       {report.photos.map((photo) => (
                         <a
                           key={photo.id}
-                          href={`/files/${photo.filePath}`}
+                          href={fileUrl(photo.filePath)}
                           target="_blank"
                           rel="noreferrer"
                           className="block h-20 w-24 overflow-hidden rounded-md border border-border"
                         >
                           <img
-                            src={`/files/${photo.filePath}`}
+                            src={fileUrl(photo.filePath)}
                             alt={photo.caption ?? 'Site photo'}
                             className="h-full w-full object-cover transition-transform hover:scale-105"
                           />
@@ -482,7 +483,7 @@ export function DprPage(): JSX.Element {
               {selected.photos.map((photo) => (
                 <img
                   key={photo.id}
-                  src={`/files/${photo.filePath}`}
+                  src={fileUrl(photo.filePath)}
                   alt={photo.caption ?? ''}
                   className="h-16 w-20 rounded-md border border-border object-cover"
                 />

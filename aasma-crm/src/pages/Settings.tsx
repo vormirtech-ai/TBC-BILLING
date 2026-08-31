@@ -21,7 +21,7 @@ import { Field, Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/misc';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useResource } from '@/hooks/useResource';
-import { ApiError, api, downloadFile } from '@/lib/api';
+import { ApiError, LOCAL_MODE, api, downloadFile } from '@/lib/api';
 import { bytes, formatDateTime } from '@/lib/format';
 import { setCurrencySymbol } from '@/lib/format';
 import { useAuth } from '@/store/auth.store';
@@ -242,8 +242,9 @@ export function SettingsPage(): JSX.Element {
                   be read back out of it.
                 </p>
                 <p>
-                  The application listens only on this machine's loopback address, so nothing on the office network or
-                  the internet can reach it.
+                  {LOCAL_MODE
+                    ? 'This build runs entirely inside your browser, so no data ever leaves this computer. With no server involved, the sign-in screen is a convenience lock on a shared desktop rather than a security boundary — anyone with access to this computer profile can reach the stored data.'
+                    : "The application listens only on this machine's loopback address, so nothing on the office network or the internet can reach it."}
                 </p>
                 <p>
                   Every value entered is validated before it is saved, and all database access is parameterised, so a
@@ -316,10 +317,18 @@ export function SettingsPage(): JSX.Element {
               <Card>
                 <CardHeader>
                   <CardTitle>Restore from a file</CardTitle>
-                  <CardDescription>Bring in a CRM_Backup_*.db file from another machine or a pen drive.</CardDescription>
+                  <CardDescription>
+                    {LOCAL_MODE
+                      ? 'Bring in a CRM_Backup_*.json file exported from another browser or computer.'
+                      : 'Bring in a CRM_Backup_*.db file from another machine or a pen drive.'}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Input type="file" accept=".db" onChange={(event) => uploadBackup(event.target.files)} />
+                  <Input
+                    type="file"
+                    accept={LOCAL_MODE ? '.json' : '.db'}
+                    onChange={(event) => uploadBackup(event.target.files)}
+                  />
                   <p className="text-xs text-muted-foreground">
                     Uploading only adds the file to the backup folder. Choose Restore next to it when you are ready.
                   </p>
@@ -364,7 +373,13 @@ export function SettingsPage(): JSX.Element {
                 </div>
                 <div>
                   <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Running as</dt>
-                  <dd>{desktop ? `Desktop application (${desktop.platform})` : 'Browser'}</dd>
+                  <dd>
+                    {desktop
+                      ? `Desktop application (${desktop.platform})`
+                      : LOCAL_MODE
+                        ? 'Hosted web app — data stored in this browser'
+                        : 'Browser'}
+                  </dd>
                 </div>
                 {desktop ? (
                   <div className="sm:col-span-2">
@@ -374,8 +389,9 @@ export function SettingsPage(): JSX.Element {
                 ) : null}
               </dl>
               <p className="border-t border-border pt-3 text-muted-foreground">
-                Everything — leads, clients, units, stock, attendance, daily reports and forecasts — is stored in a single
-                SQLite file on this machine. No internet connection is required at any point.
+                {LOCAL_MODE
+                  ? 'Everything — leads, clients, units, stock, attendance, daily reports and forecasts — is stored in this browser on this computer. Nothing is sent to a server, and the app keeps working with no connection once it has been opened. Take a backup and keep the file somewhere safe.'
+                  : 'Everything — leads, clients, units, stock, attendance, daily reports and forecasts — is stored in a single SQLite file on this machine. No internet connection is required at any point.'}
               </p>
             </CardContent>
           </Card>

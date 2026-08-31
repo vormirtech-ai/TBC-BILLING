@@ -23,7 +23,9 @@
     "dist": "npm run build && electron-builder",
     "typecheck": "tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "npm run typecheck",
-    "db:template": "cross-env DATABASE_URL=file:./template.db prisma db push --skip-generate"
+    "db:template": "cross-env DATABASE_URL=file:./template.db prisma db push --skip-generate",
+    "build:pages": "cross-env VITE_LOCAL=1 vite build --outDir docs --base ./",
+    "preview:pages": "vite preview --outDir docs --port 4173"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

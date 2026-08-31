@@ -46,6 +46,70 @@ Change it immediately from **Settings → Security**.
 
 ---
 
+## 1b. Hosting it on GitHub Pages
+
+The same application also builds as a **static website** that runs entirely in
+the browser — no Node, no server, no database engine. That is what makes it
+hostable on GitHub Pages, which only serves files.
+
+```bash
+npm install
+npm run build:pages     # writes the site into docs/  (13 files, ~2.3 MB)
+```
+
+Pick whichever route suits you:
+
+**A. Drag and drop (no git, well under GitHub's 100-file upload limit)**
+
+1. Create a new repository on GitHub.
+2. Open it, choose **Add file → Upload files**, and drag in the **contents** of
+   `docs/` — `index.html`, `sw.js`, `favicon.svg`, the two logo files,
+   `.nojekyll` and the `assets` folder.
+3. Go to **Settings → Pages**, set **Source: Deploy from a branch**, branch
+   `main`, folder `/ (root)`, and save.
+4. The site appears at `https://<user>.github.io/<repo>/` within a minute or two.
+
+**B. Push the project and let Actions build it**
+
+1. Push this folder as its own repository.
+2. **Settings → Pages → Source: GitHub Actions**.
+3. `.github/workflows/deploy-pages.yml` type-checks, builds and publishes on
+   every push to `main`.
+
+**C. Keep the project in a subfolder and publish `/docs`**
+
+Commit `docs/` and set **Settings → Pages → Deploy from a branch → /docs**. This
+only works when the project sits at the repository root.
+
+### What is different in the hosted build
+
+| | Desktop build (`start.bat`) | Hosted build (GitHub Pages) |
+| --- | --- | --- |
+| Data lives in | `data/aasma-crm.db` (SQLite) | This browser's IndexedDB |
+| Shared between computers | Copy the `.db` file | No — each browser has its own data |
+| Backup format | `CRM_Backup_*.db` | `CRM_Backup_*.json` (same buttons) |
+| DPR photos | `uploads/` folder | Stored inside the browser database |
+| Sign-in | Checked by the local server | A lock on a shared desktop, not a security boundary |
+| Works offline | Always | Yes, after the first visit (service worker) |
+| Modules, reports, Excel export, forecasting | All of them | All of them, identical |
+
+Everything else behaves the same: the screens, the validation rules, the
+forecasting maths and the Excel workbooks are the same code in both builds.
+
+**Two things to be clear about before you publish it.** A GitHub Pages site is
+public unless the repository is private and you are on a plan that supports
+private Pages — anyone with the link can open the app and see the sample data
+(there is no server to check the password before serving the page). And because
+each browser holds its own copy of the data, two people using the hosted site do
+not see each other's entries. If several people need one shared set of records,
+host the Express build on a small server instead of using Pages.
+
+The first time the app is opened in a browser it creates the administrator
+(`admin` / `admin@123`) and loads the same sample data as the desktop build, so
+the screens are never empty.
+
+---
+
 ## 2. Everyday use
 
 | I want to…                        | Where                                                    |
@@ -191,6 +255,8 @@ system — copy it and you have copied everything.
 | ------------------- | ------------------------------------------------------- |
 | `npm run dev`       | Vite dev server + Electron with hot reload              |
 | `npm run build`     | Compiles the server, Electron and the interface         |
+| `npm run build:pages` | Builds the browser-only static site into `docs/`      |
+| `npm run preview:pages` | Serves `docs/` locally to check it before publishing |
 | `npm start`         | Runs the built desktop application                      |
 | `npm run serve`     | Runs without Electron; open <http://localhost:4317>      |
 | `npm run db:push`   | Creates or updates the database from the schema         |

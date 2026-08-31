@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { HashRouter, BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/misc';
 import { AppShell } from '@/components/app/AppShell';
@@ -21,7 +21,7 @@ import { ForecastingPage } from '@/pages/Forecasting';
 import { SettingsPage } from '@/pages/Settings';
 import { useAuth } from '@/store/auth.store';
 import { useUi } from '@/store/ui.store';
-import { api, getToken, setUnauthorizedHandler } from '@/lib/api';
+import { LOCAL_MODE, api, getToken, setUnauthorizedHandler } from '@/lib/api';
 import { setCurrencySymbol } from '@/lib/format';
 
 function BootScreen(): JSX.Element {
@@ -34,6 +34,12 @@ function BootScreen(): JSX.Element {
     </div>
   );
 }
+
+/**
+ * A static host serves no rewrites, so the hosted build routes through the hash
+ * and deep links keep working on refresh. The desktop build uses clean paths.
+ */
+const Router = LOCAL_MODE ? HashRouter : BrowserRouter;
 
 export default function App(): JSX.Element {
   const status = useAuth((state) => state.status);

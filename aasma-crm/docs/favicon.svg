@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Aasma Construction">
+  <defs>
+    <linearGradient id="crimson" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#EE3A43"/>
+      <stop offset="100%" stop-color="#BC1F43"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="55%" stop-color="#C7C8CA"/>
+      <stop offset="100%" stop-color="#818286"/>
+    </linearGradient>
+    <linearGradient id="deep" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8E1533"/>
+      <stop offset="100%" stop-color="#BC1F43"/>
+    </linearGradient>
+  </defs>
+  <!-- left tower: front face and shaded return, an extruded "A" upright -->
+  <path d="M96 168 176 122v268l-80 46z" fill="url(#deep)"/>
+  <path d="M176 122l88 50v218l-88-0z" fill="url(#crimson)"/>
+  <!-- pitched roof plane, the light grey facet of the mark -->
+  <path d="M176 122 264 72l88 50-88 50z" fill="url(#steel)"/>
+  <!-- right tower: outline volume with a crimson leading edge -->
+  <path d="M352 122l64 36v232h-64z" fill="none" stroke="#BC1F43" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M264 172l88-50v268l-88 0z" fill="none" stroke="#C7C8CA" stroke-width="10" stroke-linejoin="round"/>
+  <!-- baseline accent -->
+  <rect x="96" y="404" width="320" height="18" rx="4" fill="#BC1F43"/>
+</svg>

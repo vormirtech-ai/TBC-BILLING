@@ -9,6 +9,13 @@ import type { Paginated } from '@shared/types';
 
 const TOKEN_KEY = 'aasma.token';
 
+/**
+ * Built for GitHub Pages (or any static host) the app has no server to talk to,
+ * so requests are answered by the browser database in src/local instead. The
+ * desktop build leaves this off and uses the Express API over fetch.
+ */
+export const LOCAL_MODE = import.meta.env.VITE_LOCAL === '1';
+
 let onUnauthorized: (() => void) | null = null;
 
 export function setUnauthorizedHandler(handler: () => void): void {
@@ -67,6 +74,29 @@ interface RequestOptions {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = getToken();
+
+  if (LOCAL_MODE) {
+    // Loaded on demand so the desktop bundle never carries the browser database.
+    const { localRequest } = await import('@/local');
+    try {
+      return await localRequest<T>({
+        method: options.method ?? 'GET',
+        path,
+        query: (options.query ?? {}) as Record<string, string | number | boolean>,
+        body: options.body,
+        form: options.form,
+        token,
+      });
+    } catch (error) {
+      const failure = error as { status?: number; message?: string };
+      if (failure.status === 401) {
+        setToken(null);
+        onUnauthorized?.();
+      }
+      throw new ApiError(failure.status ?? 500, failure.message ?? 'Something went wrong.');
+    }
+  }
+
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (!options.form && options.body !== undefined) headers['Content-Type'] = 'application/json';
@@ -121,8 +151,32 @@ export const api = {
  * Triggers a file download through the browser. Electron shows its normal save
  * dialog, so exports land wherever the user chooses.
  */
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function downloadFile(path: string, query?: Query): Promise<void> {
   const token = getToken();
+
+  if (LOCAL_MODE) {
+    const { localDownload } = await import('@/local');
+    try {
+      const file = await localDownload(path, (query ?? {}) as Record<string, string | number | boolean>, token);
+      saveBlob(file.blob, file.filename);
+      return;
+    } catch (error) {
+      const failure = error as { status?: number; message?: string };
+      throw new ApiError(failure.status ?? 500, failure.message ?? 'The export could not be generated.');
+    }
+  }
+
   const response = await fetch(`/api${path}${buildQuery(query)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
@@ -132,13 +186,5 @@ export async function downloadFile(path: string, query?: Query): Promise<void> {
 
   const disposition = response.headers.get('Content-Disposition') ?? '';
   const match = /filename="?([^"]+)"?/.exec(disposition);
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = match?.[1] ?? 'export.xlsx';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  saveBlob(await response.blob(), match?.[1] ?? 'export.xlsx');
 }
