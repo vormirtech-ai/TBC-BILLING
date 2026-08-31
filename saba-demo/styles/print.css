@@ -1,0 +1,299 @@
+/* ==========================================================================
+   SABA — printed output
+   ---------------------------------------------------------------------------
+   Two very different pieces of paper come out of this system.
+
+   THE GUEST BILL is a document. It is set on A4 (or 80mm thermal, switched in
+   Settings), in the restaurant's serif, with the medallion embossed behind the
+   items at 6% and the tax breakdown a chartered accountant would expect.
+
+   THE KITCHEN DOCKET is a tool. It is 80mm, sans-serif, enormous, and has no
+   watermark, no logo and no prices — a chef reading it across a hot pass needs
+   the quantity, the dish, the modifiers and nothing else. Every gram of ink
+   that is not one of those four things makes it slower to read.
+   ========================================================================== */
+
+.printarea { display: none; }
+
+@media print {
+  @page { margin: 12mm; }
+
+  html, body {
+    background: #fff !important;
+    color: #000;
+    margin: 0; padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body > *:not(.printarea) { display: none !important; }
+
+  .printarea {
+    display: block !important;
+    position: static;
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    color: #000;
+  }
+
+  .doc { page-break-after: always; }
+  .doc:last-child { page-break-after: auto; }
+}
+
+/* Shown on screen too, so the "Preview" button can show exactly what prints. */
+
+.doc {
+  background: #fff;
+  color: #111;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------- bill --- */
+
+.doc--bill {
+  width: 186mm;
+  padding: 4mm 6mm;
+  margin: 0 auto;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: 11pt;
+  line-height: 1.45;
+}
+
+/* The medallion, embossed. Set with a mask so it prints as a single flat tint
+   rather than a photograph, which is what keeps it looking like stationery on
+   a cheap office printer. */
+.doc--bill::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 48%;
+  width: 112mm; height: 112mm;
+  transform: translate(-50%, -50%);
+  background: #7e1b22;
+  opacity: .05;
+  -webkit-mask: var(--medallion) center / contain no-repeat;
+  mask: var(--medallion) center / contain no-repeat;
+  pointer-events: none;
+}
+
+.doc--bill > * { position: relative; }
+
+.doc__head {
+  display: flex; align-items: flex-start; gap: 8mm;
+  padding-bottom: 4mm;
+  border-bottom: 1.4pt solid #7e1b22;
+}
+
+.doc__logo { width: 24mm; height: 24mm; flex: none; }
+
+.doc__brand { flex: 1; }
+.doc__name {
+  font-style: italic; font-size: 25pt; line-height: 1; color: #7e1b22;
+  letter-spacing: .01em;
+}
+.doc__tagline {
+  font-size: 7.5pt; letter-spacing: .18em; text-transform: uppercase;
+  color: #6b5a4b; margin-top: 1.5mm;
+}
+.doc__addr { font-size: 8.5pt; color: #4a3d33; line-height: 1.5; margin-top: 2mm; }
+
+.doc__type {
+  text-align: right; flex: none;
+}
+.doc__type-label {
+  font-family: system-ui, sans-serif;
+  font-size: 8pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: #a9803f;
+}
+.doc__number {
+  font-size: 15pt; font-weight: 600; margin-top: 1mm;
+  font-variant-numeric: tabular-nums;
+}
+
+.doc__meta {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 2mm 6mm;
+  padding: 4mm 0;
+  border-bottom: .5pt solid #d6c8ae;
+  font-size: 8.5pt;
+}
+.doc__meta dt {
+  font-family: system-ui, sans-serif;
+  font-size: 6.8pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: #8a7768; margin-bottom: .6mm;
+}
+.doc__meta dd { margin: 0; font-weight: 600; font-size: 9.5pt; }
+
+.doc__items { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+
+.doc__items th {
+  font-family: system-ui, sans-serif;
+  font-size: 7pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: #6b5a4b; text-align: left;
+  padding: 2mm 0 1.6mm;
+  border-bottom: .8pt solid #2a211c;
+}
+.doc__items td { padding: 1.7mm 0; vertical-align: top; font-size: 10pt; }
+.doc__items tbody tr + tr td { border-top: .3pt solid #ece2d1; }
+.doc__items .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.doc__items .qty { width: 12mm; font-variant-numeric: tabular-nums; }
+.doc__items .rate { width: 24mm; }
+.doc__items .amt { width: 28mm; font-weight: 600; }
+
+.doc__course td {
+  font-family: system-ui, sans-serif;
+  font-size: 7pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: #a9803f;
+  padding-top: 3.5mm !important; border-top: 0 !important;
+}
+.doc__sub { font-size: 8pt; color: #6b5a4b; font-style: italic; }
+.doc__void { text-decoration: line-through; color: #8a7768; }
+
+.doc__foot-grid {
+  display: grid; grid-template-columns: 1fr 78mm; gap: 8mm;
+  margin-top: 5mm; align-items: start;
+}
+
+.doc__totals { display: grid; gap: 1.2mm; font-size: 10pt; }
+.doc__totals .row { display: flex; justify-content: space-between; gap: 6mm; }
+.doc__totals .row span:last-child { font-variant-numeric: tabular-nums; }
+.doc__totals .row--muted { color: #6b5a4b; font-size: 9pt; }
+.doc__totals .row--credit { color: #3d6b47; }
+.doc__totals .row--grand {
+  font-size: 14pt; font-weight: 600;
+  border-top: 1pt solid #2a211c; border-bottom: 2.4pt double #2a211c;
+  padding: 2mm 0; margin-top: 2mm;
+}
+
+.doc__tax-note {
+  font-family: system-ui, sans-serif;
+  font-size: 7.5pt; color: #6b5a4b; line-height: 1.6;
+}
+.doc__tax-note table { width: 100%; border-collapse: collapse; margin-top: 1.5mm; }
+.doc__tax-note th, .doc__tax-note td {
+  border: .3pt solid #d6c8ae; padding: 1mm 1.6mm; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.doc__tax-note th { background: #f6efe2; font-weight: 700; text-align: center; }
+.doc__tax-note td:first-child, .doc__tax-note th:first-child { text-align: left; }
+
+.doc__payments {
+  margin-top: 4mm; padding-top: 2.5mm;
+  border-top: .5pt dashed #b7a68a;
+  font-size: 9pt;
+}
+.doc__payments .row { display: flex; justify-content: space-between; padding: .6mm 0; }
+
+.doc__signoff {
+  margin-top: 7mm; padding-top: 4mm;
+  border-top: .5pt solid #d6c8ae;
+  text-align: center;
+}
+.doc__thanks { font-style: italic; font-size: 12pt; color: #7e1b22; }
+.doc__fineprint {
+  font-family: system-ui, sans-serif;
+  font-size: 7pt; color: #8a7768; line-height: 1.7; margin-top: 2mm;
+}
+
+/* Thermal variant: same document, 80mm wide and stripped of the grid layouts
+   that only make sense on a page. */
+.doc--thermal {
+  width: 72mm; padding: 3mm 2mm; font-size: 9pt;
+}
+.doc--thermal::before { width: 58mm; height: 58mm; opacity: .07; }
+.doc--thermal .doc__head { display: block; text-align: center; border-bottom-width: .8pt; }
+.doc--thermal .doc__logo { width: 17mm; height: 17mm; margin: 0 auto 1.5mm; }
+.doc--thermal .doc__name { font-size: 19pt; }
+.doc--thermal .doc__type { text-align: center; margin-top: 2mm; }
+.doc--thermal .doc__meta { grid-template-columns: 1fr 1fr; font-size: 7.5pt; }
+.doc--thermal .doc__meta dd { font-size: 8pt; }
+.doc--thermal .doc__items td { font-size: 8.5pt; }
+.doc--thermal .doc__items .rate { display: none; }
+.doc--thermal .doc__items th.rate { display: none; }
+.doc--thermal .doc__foot-grid { grid-template-columns: 1fr; }
+.doc--thermal .doc__tax-note { order: 2; }
+
+/* ------------------------------------------------------------- KOT --- */
+
+/*
+ * No serif, no logo, no prices, no watermark. Everything is set as large as it
+ * can be and still fit 80mm, because this is read at arm's length in a kitchen.
+ */
+.doc--kot {
+  width: 72mm;
+  padding: 3mm 2mm 6mm;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #000;
+  line-height: 1.3;
+}
+
+.kot__head { text-align: center; border-bottom: 2pt solid #000; padding-bottom: 2mm; }
+.kot__station {
+  font-size: 19pt; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+}
+.kot__reprint {
+  display: inline-block; margin-top: 1mm;
+  border: 1.5pt solid #000; padding: .6mm 2mm;
+  font-size: 9pt; font-weight: 800; letter-spacing: .12em;
+}
+
+.kot__meta {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 2mm 0; border-bottom: 1pt dashed #000;
+  font-size: 10pt; font-weight: 700;
+}
+.kot__table { font-size: 17pt; font-weight: 800; }
+.kot__time { font-variant-numeric: tabular-nums; }
+
+.kot__course {
+  margin-top: 3mm; padding: 1mm 0;
+  font-size: 9.5pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  border-bottom: 1pt solid #000;
+}
+
+.kot__line {
+  display: flex; gap: 2.5mm; align-items: flex-start;
+  padding: 2.2mm 0; border-bottom: .4pt dotted #666;
+}
+.kot__qty {
+  min-width: 9mm; font-size: 16pt; font-weight: 800; line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.kot__name { font-size: 13pt; font-weight: 700; line-height: 1.2; flex: 1; }
+.kot__mods { font-size: 10pt; font-weight: 600; margin-top: .8mm; }
+.kot__note {
+  font-size: 10.5pt; font-weight: 800; text-transform: uppercase;
+  border: 1.2pt solid #000; padding: .8mm 1.6mm; margin-top: 1.2mm;
+  display: inline-block;
+}
+.kot__seat { font-size: 9pt; font-weight: 700; color: #333; }
+
+.kot__foot {
+  margin-top: 3mm; padding-top: 2mm; border-top: 2pt solid #000;
+  font-size: 9pt; font-weight: 600;
+  display: flex; justify-content: space-between;
+}
+
+.kot__void {
+  text-align: center; border: 2.5pt solid #000; padding: 2mm;
+  font-size: 15pt; font-weight: 800; letter-spacing: .1em; margin-bottom: 2mm;
+}
+
+/*
+ * The preview wrapper on screen — paper laid out on a desk.
+ *
+ * Dockets sit side by side rather than stacked. That is the whole point of the
+ * moment: one order became a docket for the tandoor and a separate docket for
+ * the bar, and seeing them next to each other says it faster than any caption.
+ */
+.preview {
+  background: #ded3c0;
+  padding: 20px;
+  border-radius: var(--r);
+  display: flex; flex-wrap: wrap; gap: 16px;
+  justify-content: center; align-items: flex-start;
+  max-height: 62vh; overflow-y: auto;
+}
+.preview .doc {
+  box-shadow: 0 10px 30px rgba(42, 33, 28, .22);
+  border-radius: 2px;
+}

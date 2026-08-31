@@ -1,0 +1,74 @@
+SABA — FINE DINING BILLING & KOT
+Demonstration build
+
+
+TO OPEN IT
+──────────
+Double-click   Saba-Demo.html
+
+That is the whole system in one file. It opens in Chrome, Edge, Firefox or
+Safari. There is nothing to install, no server to start, and no internet
+connection required — it works with the network cable pulled out.
+
+
+TO SIGN IN
+──────────
+Tap a name on the lock screen, or type a PIN.
+
+  1111   Farid Naqvi     Restaurant Manager   everything, incl. reports and voids
+  2222   Alina Rahman    Captain              floor, orders, kitchen, bills
+  3333   Devesh Kamat    Cashier              floor, orders, bills, reports
+  4444   Pass            Kitchen              the kitchen display only
+
+The PINs are printed on screen because nothing in this build is real. A live
+installation issues one PIN per person and never displays it.
+
+
+THE SIX-MINUTE TOUR
+───────────────────
+The system opens in the middle of a service, so there is something real on
+every screen from the first second. Inside the app, the "Guide" button at the
+bottom of the navigation rail walks through the same six moments and will take
+you to each screen.
+
+  1. FLOOR      Eight tables in service. The stripe down each card says what is
+                happening. Table 6 has a red dot — a plate has been sitting on
+                the pass too long.
+
+  2. ORDER      Open terrace table G2. Pick a seat number, tap a dish. Try the
+                Barg Fillet: it asks for doneness. Nothing has gone to the
+                kitchen yet.
+
+  3. FIRE       Press Fire. One order becomes one docket per kitchen section —
+                the tandoor never sees the dessert line.
+
+  4. KITCHEN    The pass, read at three metres. Colour means one thing: how long
+                this has waited against that station's target. Bump a docket and
+                watch the floor plan change behind you.
+
+  5. BILLS      Open table 6, press Split, choose "by seat". Each share carries
+                its own share of the service charge and tax, and the three add
+                back to exactly the one bill.
+
+  6. REPORTS    Thirty days of trading, kitchen timings by station, and an audit
+                tab listing every void, comp and discount with the reason and
+                the manager who approved it.
+
+
+IF THE DEMO GOES OFF THE RAILS
+──────────────────────────────
+Setup → "Start the evening again" puts every table, docket and bill back to
+exactly how it opened. Nothing else on the computer is touched.
+
+
+FOR YOUR DEVELOPERS
+───────────────────
+README.md has the full feature list, the architecture and the honest list of
+what a live installation would still need to add.
+
+The readable source is in src/ — plain ES modules, no framework, no
+dependencies. `node tests/all.mjs` runs 72 tests; `node build.mjs` regenerates
+Saba-Demo.html from the source.
+
+
+Saba Restaurant Suite · demonstration build · runs entirely on the device

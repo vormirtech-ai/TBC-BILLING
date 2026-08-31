@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#5e1219" />
+    <meta name="description" content="Saba — offline billing and kitchen order management for fine dining." />
+    <title>Saba · Fine Dining Billing &amp; KOT</title>
+
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/saba-logo.svg" />
+
+    <!--
+      No web fonts, no CDN, no analytics. This terminal is expected to work with
+      the network cable pulled out, so it asks the outside world for nothing at
+      all. The serif and sans stacks in app.css resolve to good system faces on
+      Windows, macOS, iPadOS and Linux.
+    -->
+    <link rel="stylesheet" href="styles/app.css" />
+    <link rel="stylesheet" href="styles/print.css" />
+  </head>
+
+  <body>
+    <!-- Shown until the app boots, and reused for fatal start-up errors. -->
+    <div id="boot" class="boot">
+      <div class="boot__inner">
+        <img class="boot__logo" src="assets/saba-logo.svg" alt="Saba" />
+        <p class="boot__text">Opening the terminal…</p>
+      </div>
+    </div>
+
+    <!-- Bills and kitchen dockets are built here; only the printer sees them. -->
+    <div id="printArea" class="printarea" aria-hidden="true"></div>
+
+    <noscript>
+      <div class="boot__inner">
+        <p class="boot__text">
+          This terminal needs JavaScript switched on to run.
+        </p>
+      </div>
+    </noscript>
+
+    <!--
+      A plain (non-module) script, so it still runs in the one situation the
+      module below cannot: a browser that has blocked ES modules on a page
+      opened straight from a folder. If that happens the operator gets an
+      explanation instead of a white screen.
+
+      The single-file build in dist/ has no such limitation — that is what it
+      is for.
+    -->
+    <script>
+      window.addEventListener('DOMContentLoaded', function () {
+        setTimeout(function () {
+          var booting = document.getElementById('boot');
+          if (!booting || booting.hidden) return;
+          if (window.location.protocol !== 'file:') return;
+          booting.querySelector('.boot__text').innerHTML =
+            'This copy was opened directly from a folder, and some browsers will ' +
+            'not run a multi-file app that way.<br><br>' +
+            'Open <strong>Saba-Demo.html</strong> in this package instead — it is ' +
+            'the same system in one self-contained file and needs nothing else.';
+        }, 1200);
+      });
+    </script>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

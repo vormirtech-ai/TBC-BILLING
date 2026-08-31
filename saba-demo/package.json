@@ -1,0 +1,14 @@
+{
+  "name": "saba-fine-dining-pos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Saba — offline billing and kitchen order management for fine dining. Demonstration build.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node tests/all.mjs",
+    "start": "npx --yes http-server -p 8000 -o -s .",
+    "check": "node tests/all.mjs && node build.mjs"
+  },
+  "engines": { "node": ">=18" }
+}
