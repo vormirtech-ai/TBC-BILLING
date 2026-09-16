@@ -1,4 +1,4 @@
-import { TABLE_NAMES, type Database, type TableName } from './types';
+import { SYNCED_TABLES, TABLE_NAMES, type Database, type TableName, type TombstoneRow } from './types';
 
 /**
  * The browser database.
@@ -72,6 +72,7 @@ export async function loadDatabase(): Promise<Database> {
   }
 
   memory = next;
+  if (backfillUids(memory)) save(...SYNCED_TABLES);
   return memory;
 }
 
@@ -110,6 +111,51 @@ export async function replaceDatabase(next: Database): Promise<void> {
 /** Next free id for a table, mirroring SQLite's autoincrement. */
 export function nextId(table: { id: number }[]): number {
   return table.reduce((max, row) => (row.id > max ? row.id : max), 0) + 1;
+}
+
+/** A value two devices can agree identifies the same record. */
+export function newUid(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return crypto.randomUUID();
+  const random =
+    typeof globalThis.crypto?.getRandomValues === 'function'
+      ? Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('')
+      : Math.random().toString(16).slice(2);
+  return `${Date.now().toString(16)}-${random}`;
+}
+
+/**
+ * Remembers that a row was deleted here, so a later merge does not bring it
+ * back from a device that has not heard about the deletion yet.
+ */
+export function recordTombstone(table: TableName, uids: (string | undefined)[]): void {
+  const data = db();
+  const deletedAt = new Date();
+  for (const uid of uids) {
+    if (!uid) continue;
+    data.tombstones = data.tombstones.filter((row) => row.uid !== uid);
+    data.tombstones.push({ uid, table, deletedAt } satisfies TombstoneRow);
+  }
+  // A year of deletions is far more than a merge ever needs to look back on.
+  const cutoff = Date.now() - 365 * 86_400_000;
+  data.tombstones = data.tombstones.filter((row) => row.deletedAt.getTime() > cutoff);
+  save('tombstones');
+}
+
+/**
+ * Databases created before syncing existed have rows without a uid. Give them
+ * one now so they can take part in a merge.
+ */
+function backfillUids(database: Database): boolean {
+  let changed = false;
+  for (const table of SYNCED_TABLES) {
+    for (const row of database[table] as unknown as { uid?: string }[]) {
+      if (!row.uid) {
+        row.uid = newUid();
+        changed = true;
+      }
+    }
+  }
+  return changed;
 }
 
 const DATE_KEY = /(At|On|Date)$/;

@@ -1,4 +1,5 @@
 import { DEFAULT_STAGES } from '@shared/constants';
+import { newUid } from './db';
 import type { Database } from './types';
 
 /**
@@ -81,6 +82,7 @@ export function buildDemoData(target: Database): void {
     const projectId = id('projects');
     target.projects.push({
       id: projectId,
+      uid: newUid(),
       name: seed.name,
       code: seed.code,
       location: seed.location,
@@ -102,6 +104,7 @@ export function buildDemoData(target: Database): void {
       const stageId = id('projectStages');
       target.projectStages.push({
         id: stageId,
+        uid: newUid(),
         projectId,
         name: stage.name,
         weight: stage.weight,
@@ -115,6 +118,7 @@ export function buildDemoData(target: Database): void {
       for (let step = 1; step <= points; step += 1) {
         target.stageProgressLogs.push({
           id: id('stageProgressLogs'),
+      uid: newUid(),
           stageId,
           progress: Math.round((progress / points) * step),
           recordedOn: daysAgo(Math.round((points - step) * 12) + 2),
@@ -130,6 +134,7 @@ export function buildDemoData(target: Database): void {
         const done = dueDate < now && index < 2;
         target.milestones.push({
           id: id('milestones'),
+      uid: newUid(),
           projectId,
           title,
           dueDate,
@@ -151,6 +156,7 @@ export function buildDemoData(target: Database): void {
           const roll = random();
           target.properties.push({
             id: id('properties'),
+      uid: newUid(),
             projectId,
             tower,
             floor,
@@ -174,6 +180,7 @@ export function buildDemoData(target: Database): void {
     const clientId = id('clients');
     target.clients.push({
       id: clientId,
+      uid: newUid(),
       name: personName(),
       phone: phoneNumber(),
       email: `owner${property.id}@example.com`,
@@ -190,6 +197,7 @@ export function buildDemoData(target: Database): void {
     const bookingId = id('bookings');
     target.bookings.push({
       id: bookingId,
+      uid: newUid(),
       clientId,
       propertyId: property.id,
       projectId: property.projectId,
@@ -207,6 +215,7 @@ export function buildDemoData(target: Database): void {
     for (let step = 0; step < instalments; step += 1) {
       target.payments.push({
         id: id('payments'),
+      uid: newUid(),
         clientId,
         bookingId,
         amount: Math.round(agreementValue * (step === 0 ? 0.1 : 0.15)),
@@ -220,6 +229,7 @@ export function buildDemoData(target: Database): void {
 
     target.interactions.push({
       id: id('interactions'),
+      uid: newUid(),
       clientId,
       type: 'SITE_VISIT',
       detail: `Site visit for ${property.tower}-${property.unit} before booking.`,
@@ -239,6 +249,7 @@ export function buildDemoData(target: Database): void {
     const leadId = id('leads');
     target.leads.push({
       id: leadId,
+      uid: newUid(),
       name: personName(),
       phone: phoneNumber(),
       email: random() > 0.35 ? `lead${index}@example.com` : null,
@@ -262,6 +273,7 @@ export function buildDemoData(target: Database): void {
 
     target.leadActivities.push({
       id: id('leadActivities'),
+      uid: newUid(),
       leadId,
       type: 'CALL',
       detail: 'First call — shared price list and floor plans.',
@@ -271,6 +283,7 @@ export function buildDemoData(target: Database): void {
     if (['SITE_VISIT', 'NEGOTIATION', 'WON'].includes(status) && property) {
       target.leadActivities.push({
         id: id('leadActivities'),
+      uid: newUid(),
         leadId,
         type: 'VISIT',
         detail: `Visited ${property.tower}-${property.unit}.`,
@@ -300,6 +313,7 @@ export function buildDemoData(target: Database): void {
     const materialId = id('materials');
     target.materials.push({
       id: materialId,
+      uid: newUid(),
       name: seed.name,
       category: seed.category,
       unit: seed.unit,
@@ -315,6 +329,7 @@ export function buildDemoData(target: Database): void {
       const quantity = Math.round(seed.openingStock * (0.4 + random() * 0.8));
       target.purchases.push({
         id: id('purchases'),
+      uid: newUid(),
         materialId,
         projectId: pick(target.projects).id,
         quantity,
@@ -332,6 +347,7 @@ export function buildDemoData(target: Database): void {
       if (random() > 0.55) continue;
       target.materialUsages.push({
         id: id('materialUsages'),
+      uid: newUid(),
         materialId,
         projectId: pick(target.projects).id,
         quantity: Math.max(1, Math.round(seed.openingStock * (0.005 + random() * 0.02))),
@@ -345,6 +361,7 @@ export function buildDemoData(target: Database): void {
     if (random() > 0.7) {
       target.stockAdjustments.push({
         id: id('stockAdjustments'),
+      uid: newUid(),
         materialId,
         quantity: -Math.round(seed.openingStock * 0.01),
         reason: pick(['DAMAGE', 'WASTAGE']),
@@ -361,6 +378,7 @@ export function buildDemoData(target: Database): void {
     const wage = skill === 'SUPERVISOR' ? 950 : skill === 'HELPER' ? 480 : between(600, 820);
     target.workers.push({
       id: id('workers'),
+      uid: newUid(),
       name: `${name} ${pick(LAST_NAMES)}`,
       mobile: phoneNumber(),
       skill,
@@ -382,6 +400,7 @@ export function buildDemoData(target: Database): void {
       const status = roll < 0.82 ? 'PRESENT' : roll < 0.9 ? 'HALF_DAY' : 'ABSENT';
       target.attendances.push({
         id: id('attendances'),
+      uid: newUid(),
         workerId: worker.id,
         projectId: worker.projectId,
         markedOn: date,
@@ -401,6 +420,7 @@ export function buildDemoData(target: Database): void {
       const dprId = id('dprs');
       target.dprs.push({
         id: dprId,
+        uid: newUid(),
         projectId: project.id,
         reportDate: date,
         weather: pick(['CLEAR', 'CLOUDY', 'RAIN', 'HOT']),
@@ -432,6 +452,7 @@ export function buildDemoData(target: Database): void {
         if (random() > 0.5) continue;
         target.dprMaterials.push({
           id: id('dprMaterials'),
+      uid: newUid(),
           dprId,
           materialId: material.id,
           quantity: Math.max(1, Math.round(material.openingStock * 0.01)),

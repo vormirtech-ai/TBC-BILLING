@@ -1,4 +1,4 @@
-import { db, nextId, save } from './db';
+import { db, newUid, nextId, save } from './db';
 
 /**
  * Sign-in for the hosted build.
@@ -96,6 +96,7 @@ export async function ensureAdminUser(): Promise<void> {
   if (data.users.length > 0) return;
   data.users.push({
     id: nextId(data.users),
+    uid: newUid(),
     username: 'admin',
     passwordHash: await hashPassword('admin@123'),
     fullName: 'Administrator',

@@ -4,7 +4,7 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import { PATHS } from './lib/paths';
 import { errorMiddleware } from './lib/errors';
-import { requireAuth } from './lib/auth';
+import { requireAuth, requireRole } from './lib/auth';
 import { authRouter } from './routes/auth.routes';
 import { leadsRouter } from './routes/leads.routes';
 import { bookingsRouter, clientsRouter, paymentsRouter } from './routes/clients.routes';
@@ -49,7 +49,9 @@ export function createApp(): Express {
   api.use('/payments', paymentsRouter);
   api.use('/projects', projectsRouter);
   api.use('/milestones', milestonesRouter);
-  api.use('/properties', propertiesRouter);
+  // The property book and its prices are the administrator's; a site account is
+  // refused here, not merely shown a menu without the link.
+  api.use('/properties', requireRole('ADMIN'), propertiesRouter);
   api.use('/materials', materialsRouter);
   api.use('/purchases', purchasesRouter);
   api.use('/usage', usageRouter);

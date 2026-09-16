@@ -9,6 +9,12 @@
 
 export interface BaseRow {
   id: number;
+  /**
+   * Stable identity across devices. The numeric id stays local to one browser
+   * (it is what the screens and foreign keys use); the uid is what two devices
+   * agree on when their data is merged through GitHub.
+   */
+  uid: string;
   createdAt: Date;
 }
 
@@ -26,6 +32,31 @@ export interface SettingRow {
   key: string;
   value: string;
   updatedAt: Date;
+}
+
+/** Records a deletion so a merge does not resurrect the row from another device. */
+export interface TombstoneRow {
+  uid: string;
+  table: TableName;
+  deletedAt: Date;
+}
+
+/** The GitHub connection and the state of the last exchange with it. */
+export interface SyncMetaRow {
+  key: 'sync';
+  /** Identifies this browser in the sync log. */
+  deviceId: string;
+  deviceName: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+  token: string;
+  autoSync: boolean;
+  lastSyncedAt: Date | null;
+  lastPushedAt: Date | null;
+  lastStatus: string;
+  remoteSha: string | null;
 }
 
 export interface ActivityLogRow extends BaseRow {
@@ -240,6 +271,7 @@ export interface DprRow extends BaseRow {
 
 export interface DprMaterialRow {
   id: number;
+  uid: string;
   dprId: number;
   materialId: number;
   quantity: number;
@@ -247,6 +279,7 @@ export interface DprMaterialRow {
 
 export interface DprPhotoRow {
   id: number;
+  uid: string;
   dprId: number;
   /** A data: URL — the image itself lives in this browser's database. */
   filePath: string;
@@ -309,6 +342,8 @@ export interface Database {
   forecastSnapshots: ForecastSnapshotRow[];
   backups: BackupRow[];
   sessions: SessionRow[];
+  tombstones: TombstoneRow[];
+  syncMeta: SyncMetaRow[];
 }
 
 export type TableName = keyof Database;
@@ -341,4 +376,63 @@ export const TABLE_NAMES: TableName[] = [
   'forecastSnapshots',
   'backups',
   'sessions',
+  'tombstones',
+  'syncMeta',
 ];
+
+/**
+ * The tables that travel to GitHub. Backups, sessions and the sync settings
+ * themselves stay on the device that made them.
+ */
+export const SYNCED_TABLES: TableName[] = [
+  'users',
+  'settings',
+  'projects',
+  'projectStages',
+  'stageProgressLogs',
+  'milestones',
+  'properties',
+  'leads',
+  'leadActivities',
+  'clients',
+  'bookings',
+  'payments',
+  'documents',
+  'interactions',
+  'materials',
+  'purchases',
+  'materialUsages',
+  'stockAdjustments',
+  'workers',
+  'attendances',
+  'dprs',
+  'dprMaterials',
+  'dprPhotos',
+  'forecastSnapshots',
+];
+
+/**
+ * Foreign keys, so rows arriving from another device can have their references
+ * repointed at the local numeric ids of the same records.
+ */
+export const RELATIONS: Partial<Record<TableName, Record<string, TableName>>> = {
+  projectStages: { projectId: 'projects' },
+  stageProgressLogs: { stageId: 'projectStages' },
+  milestones: { projectId: 'projects' },
+  properties: { projectId: 'projects' },
+  leads: { interestedPropertyId: 'properties', projectId: 'projects', convertedClientId: 'clients' },
+  leadActivities: { leadId: 'leads' },
+  bookings: { clientId: 'clients', propertyId: 'properties', projectId: 'projects' },
+  payments: { clientId: 'clients', bookingId: 'bookings' },
+  documents: { clientId: 'clients', bookingId: 'bookings' },
+  interactions: { clientId: 'clients' },
+  purchases: { materialId: 'materials', projectId: 'projects' },
+  materialUsages: { materialId: 'materials', projectId: 'projects' },
+  stockAdjustments: { materialId: 'materials' },
+  workers: { projectId: 'projects' },
+  attendances: { workerId: 'workers', projectId: 'projects' },
+  dprs: { projectId: 'projects' },
+  dprMaterials: { dprId: 'dprs', materialId: 'materials' },
+  dprPhotos: { dprId: 'dprs' },
+  forecastSnapshots: { projectId: 'projects' },
+};

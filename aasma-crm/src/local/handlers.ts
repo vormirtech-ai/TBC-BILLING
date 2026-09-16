@@ -21,19 +21,23 @@ import {
   stageProgressSchema,
   stockAdjustmentSchema,
   workerSchema,
+  userSchema,
   attendanceDaySchema,
+  syncSettingsSchema,
 } from '@shared/schemas';
 import { DEFAULT_STAGES } from '@shared/constants';
 import { ATTENDANCE_WEIGHT, type AttendanceStatus } from '@shared/constants';
+import { capabilitiesFor, isAdmin } from '@shared/permissions';
 import type { GlobalSearchHit } from '@shared/types';
-import { db, nextId, parseDatabase, replaceDatabase, save, serialiseDatabase } from './db';
+import { db, newUid, nextId, parseDatabase, recordTombstone, replaceDatabase, save, serialiseDatabase } from './db';
 import { createSession, endSession, hashPassword, userForToken, verifyPassword } from './auth';
+import { pull, push, saveSyncMeta, syncMeta, syncNow, syncStatus, testConnection } from './sync';
 import { byId, dayKey, endOfDay, listRows, round, startOfDay, type Query } from './query';
 import { stockRows } from './services/stock';
 import { dashboardAlerts, dashboardCharts, dashboardSummary } from './services/dashboard';
 import { buildAllForecasts, buildForecast } from './services/forecast';
 import { REPORTS, buildReport } from './services/reports';
-import type { AttendanceRow, DprRow } from './types';
+import type { AttendanceRow, Database, DprRow, TableName } from './types';
 
 /** An error carrying the HTTP status the UI already knows how to display. */
 export class LocalApiError extends Error {
@@ -90,10 +94,22 @@ function requireUser(context: Context): { id: number; username: string; fullName
   return user;
 }
 
+/**
+ * The property book and its prices, the user list and the sync settings belong
+ * to the administrator. Refusing here — not only hiding the menu item — means a
+ * user account cannot reach the data by typing the address.
+ */
+function requireAdmin(context: Context): { id: number; username: string; fullName: string; role: string } {
+  const user = requireUser(context);
+  if (!isAdmin(user.role)) throw new LocalApiError(403, 'Only an administrator can open this.');
+  return user;
+}
+
 function logActivity(actor: string, action: string, entity: string, entityId?: number | string, detail?: string): void {
   const data = db();
   data.activityLogs.push({
     id: nextId(data.activityLogs),
+    uid: newUid(),
     actor,
     action,
     entity,
@@ -103,6 +119,24 @@ function logActivity(actor: string, action: string, entity: string, entityId?: n
   });
   if (data.activityLogs.length > 500) data.activityLogs = data.activityLogs.slice(-500);
   save('activityLogs');
+}
+
+/**
+ * Deletes rows and records a tombstone for each, so the deletion survives a
+ * merge with another device instead of the row coming back.
+ */
+function removeRows<K extends TableName>(table: K, predicate: (row: Database[K][number]) => boolean): number {
+  const data = db();
+  const rows = data[table] as Database[K][number][];
+  const doomed = rows.filter(predicate);
+  if (doomed.length === 0) return 0;
+  recordTombstone(
+    table,
+    doomed.map((row) => (row as { uid?: string }).uid),
+  );
+  (data as unknown as Record<string, unknown[]>)[table] = rows.filter((row) => !predicate(row));
+  save(table);
+  return doomed.length;
 }
 
 const num = (value: unknown): number | null => {
@@ -206,7 +240,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const input = leadSchema.parse(context.body);
     const data = db();
     const row = {
-      id: nextId(data.leads),
+      id: nextId(data.leads), uid: newUid(),
       ...input,
       email: input.email ?? null,
       assignedTo: input.assignedTo ?? null,
@@ -220,7 +254,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     };
     data.leads.push(row);
     data.leadActivities.push({
-      id: nextId(data.leadActivities),
+      id: nextId(data.leadActivities), uid: newUid(),
       leadId: row.id,
       type: 'NOTE',
       detail: `Lead created by ${user.username}.`,
@@ -258,9 +292,8 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const data = db();
     const id = Number(context.params.id);
     if (!byId(data.leads, id)) throw notFound('Lead');
-    data.leads = data.leads.filter((row) => row.id !== id);
-    data.leadActivities = data.leadActivities.filter((row) => row.leadId !== id);
-    save('leads', 'leadActivities');
+    removeRows('leadActivities', (row: { leadId: number }) => row.leadId === id);
+    removeRows('leads', (row: { id: number }) => row.id === id);
     logActivity(user.username, 'DELETE', 'Lead', id);
     return { ok: true };
   },
@@ -275,7 +308,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     lead.status = status;
     lead.updatedAt = new Date();
     data.leadActivities.push({
-      id: nextId(data.leadActivities),
+      id: nextId(data.leadActivities), uid: newUid(),
       leadId: lead.id,
       type: 'STATUS_CHANGE',
       detail: `Status changed from ${previous} to ${status}.`,
@@ -301,7 +334,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const leadId = Number(context.params.id);
     if (!byId(data.leads, leadId)) throw notFound('Lead');
     const input = leadActivitySchema.parse(context.body);
-    const row = { id: nextId(data.leadActivities), leadId, ...input, createdAt: new Date() };
+    const row = { id: nextId(data.leadActivities), uid: newUid(), leadId, ...input, createdAt: new Date() };
     data.leadActivities.push(row);
     save('leadActivities');
     return row;
@@ -315,7 +348,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const input = convertLeadSchema.parse(context.body ?? {});
 
     const client = {
-      id: nextId(data.clients),
+      id: nextId(data.clients), uid: newUid(),
       name: lead.name,
       phone: lead.phone,
       email: lead.email,
@@ -328,7 +361,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     };
     data.clients.push(client);
     data.interactions.push({
-      id: nextId(data.interactions),
+      id: nextId(data.interactions), uid: newUid(),
       clientId: client.id,
       type: 'NOTE',
       detail: `Converted from lead #${lead.id} (${lead.source.toLowerCase()}).`,
@@ -341,7 +374,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
       const property = byId(data.properties, propertyId);
       if (!property) throw notFound('Property');
       data.bookings.push({
-        id: nextId(data.bookings),
+        id: nextId(data.bookings), uid: newUid(),
         clientId: client.id,
         propertyId,
         projectId: property.projectId,
@@ -361,7 +394,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     lead.convertedClientId = client.id;
     lead.updatedAt = new Date();
     data.leadActivities.push({
-      id: nextId(data.leadActivities),
+      id: nextId(data.leadActivities), uid: newUid(),
       leadId: lead.id,
       type: 'STATUS_CHANGE',
       detail: `Converted to client #${client.id}.`,
@@ -407,7 +440,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const input = clientSchema.parse(context.body);
     const data = db();
     const row = {
-      id: nextId(data.clients),
+      id: nextId(data.clients), uid: newUid(),
       ...input,
       email: input.email ?? null,
       address: input.address ?? null,
@@ -453,12 +486,12 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
       const property = byId(data.properties, booking.propertyId);
       if (property) property.status = 'AVAILABLE';
     }
-    data.clients = data.clients.filter((row) => row.id !== id);
-    data.bookings = data.bookings.filter((row) => row.clientId !== id);
-    data.payments = data.payments.filter((row) => row.clientId !== id);
-    data.interactions = data.interactions.filter((row) => row.clientId !== id);
-    data.documents = data.documents.filter((row) => row.clientId !== id);
-    save('clients', 'bookings', 'payments', 'interactions', 'documents', 'properties');
+    removeRows('bookings', (row: { clientId: number }) => row.clientId === id);
+    removeRows('payments', (row: { clientId: number }) => row.clientId === id);
+    removeRows('interactions', (row: { clientId: number }) => row.clientId === id);
+    removeRows('documents', (row: { clientId: number | null }) => row.clientId === id);
+    removeRows('clients', (row: { id: number }) => row.id === id);
+    save('properties');
     logActivity(user.username, 'DELETE', 'Client', id);
     return { ok: true };
   },
@@ -538,7 +571,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const clientId = Number(context.params.id);
     if (!byId(data.clients, clientId)) throw notFound('Client');
     const input = interactionSchema.parse({ ...(context.body as object), clientId });
-    const row = { id: nextId(data.interactions), ...input, createdAt: new Date() };
+    const row = { id: nextId(data.interactions), uid: newUid(), ...input, createdAt: new Date() };
     data.interactions.push(row);
     save('interactions');
     return row;
@@ -565,7 +598,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const property = byId(data.properties, input.propertyId);
     if (!property) throw notFound('Property');
     const row = {
-      id: nextId(data.bookings),
+      id: nextId(data.bookings), uid: newUid(),
       ...input,
       projectId: input.projectId ?? property.projectId,
       agreementNo: input.agreementNo ?? null,
@@ -598,7 +631,7 @@ export const handlers: Record<string, (context: Context) => unknown | Promise<un
     const data = db();
     if (!byId(data.clients, input.clientId)) throw notFound('Client');
     const row = {
-      id: nextId(data.payments),
+      id: nextId(data.payments), uid: newUid(),
       ...input,
       bookingId: input.bookingId ?? null,
       reference: input.reference ?? null,
@@ -659,7 +692,7 @@ Object.assign(handlers, {
       throw new LocalApiError(409, 'That project code is already in use.');
     }
     const row = {
-      id: nextId(data.projects),
+      id: nextId(data.projects), uid: newUid(),
       ...input,
       actualEndDate: input.actualEndDate ?? null,
       contractor: input.contractor ?? null,
@@ -671,7 +704,7 @@ Object.assign(handlers, {
     data.projects.push(row);
     DEFAULT_STAGES.forEach((stage, index) => {
       data.projectStages.push({
-        id: nextId(data.projectStages),
+        id: nextId(data.projectStages), uid: newUid(),
         projectId: row.id,
         name: stage.name,
         weight: stage.weight,
@@ -717,37 +750,23 @@ Object.assign(handlers, {
     const propertyIds = data.properties.filter((row) => row.projectId === id).map((row) => row.id);
     const dprIds = data.dprs.filter((row) => row.projectId === id).map((row) => row.id);
 
-    data.projects = data.projects.filter((row) => row.id !== id);
-    data.projectStages = data.projectStages.filter((row) => row.projectId !== id);
-    data.stageProgressLogs = data.stageProgressLogs.filter((row) => !stageIds.includes(row.stageId));
-    data.milestones = data.milestones.filter((row) => row.projectId !== id);
-    data.properties = data.properties.filter((row) => row.projectId !== id);
-    data.bookings = data.bookings.filter((row) => !propertyIds.includes(row.propertyId));
-    data.materialUsages = data.materialUsages.filter((row) => row.projectId !== id);
-    data.purchases = data.purchases.map((row) => (row.projectId === id ? { ...row, projectId: null } : row));
-    data.attendances = data.attendances.filter((row) => row.projectId !== id);
-    data.workers = data.workers.map((row) => (row.projectId === id ? { ...row, projectId: null } : row));
-    data.dprs = data.dprs.filter((row) => row.projectId !== id);
-    data.dprMaterials = data.dprMaterials.filter((row) => !dprIds.includes(row.dprId));
-    data.dprPhotos = data.dprPhotos.filter((row) => !dprIds.includes(row.dprId));
-    data.forecastSnapshots = data.forecastSnapshots.filter((row) => row.projectId !== id);
+    removeRows('stageProgressLogs', (row: { stageId: number }) => stageIds.includes(row.stageId));
+    removeRows('projectStages', (row: { projectId: number }) => row.projectId === id);
+    removeRows('milestones', (row: { projectId: number }) => row.projectId === id);
+    removeRows('bookings', (row: { propertyId: number }) => propertyIds.includes(row.propertyId));
+    removeRows('properties', (row: { projectId: number }) => row.projectId === id);
+    removeRows('materialUsages', (row: { projectId: number }) => row.projectId === id);
+    removeRows('attendances', (row: { projectId: number | null }) => row.projectId === id);
+    removeRows('dprMaterials', (row: { dprId: number }) => dprIds.includes(row.dprId));
+    removeRows('dprPhotos', (row: { dprId: number }) => dprIds.includes(row.dprId));
+    removeRows('dprs', (row: { projectId: number }) => row.projectId === id);
+    removeRows('forecastSnapshots', (row: { projectId: number }) => row.projectId === id);
+    removeRows('projects', (row: { id: number }) => row.id === id);
 
-    save(
-      'projects',
-      'projectStages',
-      'stageProgressLogs',
-      'milestones',
-      'properties',
-      'bookings',
-      'materialUsages',
-      'purchases',
-      'attendances',
-      'workers',
-      'dprs',
-      'dprMaterials',
-      'dprPhotos',
-      'forecastSnapshots',
-    );
+    // Purchases and workers outlive the site they were booked against.
+    data.purchases = data.purchases.map((row) => (row.projectId === id ? { ...row, projectId: null } : row));
+    data.workers = data.workers.map((row) => (row.projectId === id ? { ...row, projectId: null } : row));
+    save('purchases', 'workers');
     logActivity(user.username, 'DELETE', 'Project', id);
     return { ok: true };
   },
@@ -820,7 +839,7 @@ Object.assign(handlers, {
     stage.progress = input.progress;
     stage.updatedAt = new Date();
     data.stageProgressLogs.push({
-      id: nextId(data.stageProgressLogs),
+      id: nextId(data.stageProgressLogs), uid: newUid(),
       stageId: stage.id,
       progress: input.progress,
       recordedOn: input.recordedOn,
@@ -838,7 +857,7 @@ Object.assign(handlers, {
     const data = db();
     if (!byId(data.projects, input.projectId)) throw notFound('Project');
     const row = {
-      id: nextId(data.milestones),
+      id: nextId(data.milestones), uid: newUid(),
       ...input,
       completedOn: input.completedOn ?? null,
       notes: input.notes ?? null,
@@ -853,7 +872,7 @@ Object.assign(handlers, {
 
   // ---------------------------------------------------------------- properties
   'GET /properties': (context: Context) => {
-    requireUser(context);
+    requireAdmin(context);
     const data = db();
     const projectId = num(context.query.projectId);
     const page = listRows(data.properties as unknown as Record<string, unknown>[], context.query, {
@@ -886,7 +905,7 @@ Object.assign(handlers, {
   },
 
   'GET /properties/summary': (context: Context) => {
-    requireUser(context);
+    requireAdmin(context);
     const data = db();
     const projectId = num(context.query.projectId);
     const rows = data.properties.filter((row) => (projectId ? row.projectId === projectId : true));
@@ -906,7 +925,7 @@ Object.assign(handlers, {
   },
 
   'GET /properties/map': (context: Context) => {
-    requireUser(context);
+    requireAdmin(context);
     const data = db();
     const projectId = num(context.query.projectId);
     const properties = data.properties.filter((row) => (projectId ? row.projectId === projectId : true));
@@ -949,7 +968,7 @@ Object.assign(handlers, {
   },
 
   'POST /properties': (context: Context) => {
-    const user = requireUser(context);
+    const user = requireAdmin(context);
     const input = propertySchema.parse(context.body);
     const data = db();
     if (
@@ -960,7 +979,7 @@ Object.assign(handlers, {
       throw new LocalApiError(409, 'That tower and unit already exists in this project.');
     }
     const row = {
-      id: nextId(data.properties),
+      id: nextId(data.properties), uid: newUid(),
       ...input,
       notes: input.notes ?? null,
       createdAt: new Date(),
@@ -973,7 +992,7 @@ Object.assign(handlers, {
   },
 
   'PUT /properties/:id': (context: Context) => {
-    const user = requireUser(context);
+    const user = requireAdmin(context);
     const data = db();
     const property = byId(data.properties, Number(context.params.id));
     if (!property) throw notFound('Property');
@@ -985,19 +1004,18 @@ Object.assign(handlers, {
   },
 
   'DELETE /properties/:id': (context: Context) => {
-    const user = requireUser(context);
+    const user = requireAdmin(context);
     const data = db();
     const id = Number(context.params.id);
     if (!byId(data.properties, id)) throw notFound('Property');
-    data.properties = data.properties.filter((row) => row.id !== id);
-    data.bookings = data.bookings.filter((row) => row.propertyId !== id);
-    save('properties', 'bookings');
+    removeRows('bookings', (row: { propertyId: number }) => row.propertyId === id);
+    removeRows('properties', (row: { id: number }) => row.id === id);
     logActivity(user.username, 'DELETE', 'Property', id);
     return { ok: true };
   },
 
   'POST /properties/import': (context: Context) => {
-    const user = requireUser(context);
+    const user = requireAdmin(context);
     const { rows } = propertyImportSchema.parse(context.body);
     const data = db();
     let created = 0;
@@ -1012,7 +1030,7 @@ Object.assign(handlers, {
         updated += 1;
       } else {
         data.properties.push({
-          id: nextId(data.properties),
+          id: nextId(data.properties), uid: newUid(),
           ...row,
           notes: row.notes ?? null,
           createdAt: new Date(),
@@ -1081,7 +1099,7 @@ Object.assign(handlers, {
     if (data.materials.some((row) => row.name.toLowerCase() === input.name.toLowerCase())) {
       throw new LocalApiError(409, 'A material with that name already exists.');
     }
-    const row = { id: nextId(data.materials), ...input, createdAt: new Date(), updatedAt: new Date() };
+    const row = { id: nextId(data.materials), uid: newUid(), ...input, createdAt: new Date(), updatedAt: new Date() };
     data.materials.push(row);
     save('materials');
     logActivity(user.username, 'CREATE', 'Material', row.id);
@@ -1175,7 +1193,7 @@ Object.assign(handlers, {
     const data = db();
     if (!byId(data.materials, input.materialId)) throw notFound('Material');
     const row = {
-      id: nextId(data.purchases),
+      id: nextId(data.purchases), uid: newUid(),
       ...input,
       projectId: input.projectId ?? null,
       supplier: input.supplier ?? null,
@@ -1227,7 +1245,7 @@ Object.assign(handlers, {
     if (!byId(data.materials, input.materialId)) throw notFound('Material');
     if (!byId(data.projects, input.projectId)) throw notFound('Project');
     const row = {
-      id: nextId(data.materialUsages),
+      id: nextId(data.materialUsages), uid: newUid(),
       ...input,
       issuedTo: input.issuedTo ?? null,
       notes: input.notes ?? null,
@@ -1320,7 +1338,7 @@ Object.assign(handlers, {
     const data = db();
     if (!byId(data.materials, input.materialId)) throw notFound('Material');
     const row = {
-      id: nextId(data.stockAdjustments),
+      id: nextId(data.stockAdjustments), uid: newUid(),
       ...input,
       notes: input.notes ?? null,
       createdAt: new Date(),
@@ -1379,7 +1397,7 @@ Object.assign(handlers, {
     const input = workerSchema.parse(context.body);
     const data = db();
     const row = {
-      id: nextId(data.workers),
+      id: nextId(data.workers), uid: newUid(),
       ...input,
       mobile: input.mobile ?? null,
       contractor: input.contractor ?? null,
@@ -1416,9 +1434,8 @@ Object.assign(handlers, {
     const data = db();
     const id = Number(context.params.id);
     if (!byId(data.workers, id)) throw notFound('Worker');
-    data.workers = data.workers.filter((row) => row.id !== id);
-    data.attendances = data.attendances.filter((row) => row.workerId !== id);
-    save('workers', 'attendances');
+    removeRows('attendances', (row: { workerId: number }) => row.workerId === id);
+    removeRows('workers', (row: { id: number }) => row.id === id);
     logActivity(user.username, 'DELETE', 'Worker', id);
     return { ok: true };
   },
@@ -1474,7 +1491,7 @@ Object.assign(handlers, {
         existing.projectId = input.projectId ?? null;
       } else {
         data.attendances.push({
-          id: nextId(data.attendances),
+          id: nextId(data.attendances), uid: newUid(),
           workerId: entry.workerId,
           projectId: input.projectId ?? null,
           markedOn,
@@ -1680,7 +1697,7 @@ Object.assign(handlers, {
     }
 
     const row = {
-      id: nextId(data.dprs),
+      id: nextId(data.dprs), uid: newUid(),
       projectId: input.projectId,
       reportDate: input.reportDate,
       weather: input.weather,
@@ -1697,14 +1714,14 @@ Object.assign(handlers, {
 
     for (const item of input.materials) {
       data.dprMaterials.push({
-        id: nextId(data.dprMaterials),
+        id: nextId(data.dprMaterials), uid: newUid(),
         dprId: row.id,
         materialId: item.materialId,
         quantity: item.quantity,
       });
       if (input.deductStock) {
         data.materialUsages.push({
-          id: nextId(data.materialUsages),
+          id: nextId(data.materialUsages), uid: newUid(),
           materialId: item.materialId,
           projectId: input.projectId,
           quantity: item.quantity,
@@ -1744,7 +1761,7 @@ Object.assign(handlers, {
     data.dprMaterials = data.dprMaterials.filter((row) => row.dprId !== report.id);
     for (const item of input.materials) {
       data.dprMaterials.push({
-        id: nextId(data.dprMaterials),
+        id: nextId(data.dprMaterials), uid: newUid(),
         dprId: report.id,
         materialId: item.materialId,
         quantity: item.quantity,
@@ -1761,10 +1778,9 @@ Object.assign(handlers, {
     const data = db();
     const id = Number(context.params.id);
     if (!byId(data.dprs, id)) throw notFound('Daily progress report');
-    data.dprs = data.dprs.filter((row) => row.id !== id);
-    data.dprMaterials = data.dprMaterials.filter((row) => row.dprId !== id);
-    data.dprPhotos = data.dprPhotos.filter((row) => row.dprId !== id);
-    save('dprs', 'dprMaterials', 'dprPhotos');
+    removeRows('dprMaterials', (row: { dprId: number }) => row.dprId === id);
+    removeRows('dprPhotos', (row: { dprId: number }) => row.dprId === id);
+    removeRows('dprs', (row: { id: number }) => row.id === id);
     logActivity(user.username, 'DELETE', 'DPR', id);
     return { ok: true };
   },
@@ -1784,6 +1800,7 @@ Object.assign(handlers, {
       if (!file.type.startsWith('image/')) throw badRequest(`${file.name} is not an image.`);
       data.dprPhotos.push({
         id: nextId(data.dprPhotos as unknown as { id: number }[]),
+        uid: newUid(),
         dprId,
         filePath: await fileToDataUrl(file),
         caption,
@@ -1796,10 +1813,8 @@ Object.assign(handlers, {
 
   'DELETE /dpr/photos/:photoId': (context: Context) => {
     requireUser(context);
-    const data = db();
     const id = Number(context.params.photoId);
-    data.dprPhotos = data.dprPhotos.filter((row) => row.id !== id);
-    save('dprPhotos');
+    removeRows('dprPhotos', (row: { id: number }) => row.id === id);
     return { ok: true };
   },
 
@@ -1844,7 +1859,7 @@ Object.assign(handlers, {
     if (!forecast) throw notFound('Project');
     const data = db();
     data.forecastSnapshots.push({
-      id: nextId(data.forecastSnapshots),
+      id: nextId(data.forecastSnapshots), uid: newUid(),
       projectId: forecast.projectId,
       runOn: new Date(),
       progressPct: forecast.progressPct,
@@ -1876,15 +1891,20 @@ Object.assign(handlers, {
 
   // ---------------------------------------------------------------- reports
   'GET /reports': (context: Context) => {
-    requireUser(context);
-    return REPORTS;
+    const user = requireUser(context);
+    const allowed = capabilitiesFor(user.role);
+    return REPORTS.filter((report) => allowed.properties || report.key !== 'properties');
   },
 
   'GET /reports/:key': (context: Context) => {
-    requireUser(context);
+    const user = requireUser(context);
     const key = String(context.params.key);
     if (!REPORTS.some((report) => report.key === key)) throw badRequest('Unknown report.');
-    return buildReport(key, context.query);
+    const allowed = capabilitiesFor(user.role);
+    if (key === 'properties' && !allowed.properties) {
+      throw new LocalApiError(403, 'Only an administrator can open the property report.');
+    }
+    return buildReport(key, context.query, { properties: allowed.properties });
   },
 
   // ---------------------------------------------------------------- settings
@@ -2002,7 +2022,8 @@ Object.assign(handlers, {
 
   // ---------------------------------------------------------------- search
   'GET /search': (context: Context) => {
-    requireUser(context);
+    const user = requireUser(context);
+    const allowed = capabilitiesFor(user.role);
     const term = String(context.query.q ?? '').trim().toLowerCase();
     if (term.length < 2) return [];
     const data = db();
@@ -2030,7 +2051,7 @@ Object.assign(handlers, {
           subtitle: `Client • ${row.phone}`,
           href: `/clients/${row.id}`,
         })),
-      ...data.properties
+      ...(allowed.properties ? data.properties : [])
         .filter((row) => has(row.unit) || has(row.tower))
         .slice(0, take)
         .map((row) => ({
@@ -2122,3 +2143,169 @@ export function describeError(error: unknown): LocalApiError {
   console.error('[local-api] unhandled error:', error);
   return new LocalApiError(500, 'Something went wrong. The action was not saved.');
 }
+
+// ---------------------------------------------------------------- accounts and sync
+Object.assign(handlers, {
+  'GET /users': (context: Context) => {
+    requireAdmin(context);
+    return db()
+      .users.slice()
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((user) => ({
+        id: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        role: user.role,
+        active: user.active,
+        lastLoginAt: user.lastLoginAt,
+        createdAt: user.createdAt,
+      }));
+  },
+
+  'POST /users': async (context: Context) => {
+    const actor = requireAdmin(context);
+    const input = userSchema.parse(context.body);
+    if (!input.password) throw badRequest('Set a password for the new account.');
+
+    const data = db();
+    const username = input.username.toLowerCase();
+    if (data.users.some((row) => row.username === username)) {
+      throw new LocalApiError(409, 'That username is already taken.');
+    }
+
+    const row = {
+      id: nextId(data.users),
+      uid: newUid(),
+      username,
+      passwordHash: await hashPassword(input.password),
+      fullName: input.fullName,
+      role: input.role,
+      active: input.active,
+      lastLoginAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    data.users.push(row);
+    save('users');
+    logActivity(actor.username, 'CREATE', 'User', row.id, username);
+    return { id: row.id, username: row.username, fullName: row.fullName, role: row.role, active: row.active };
+  },
+
+  'PUT /users/:id': async (context: Context) => {
+    const actor = requireAdmin(context);
+    const data = db();
+    const user = byId(data.users, Number(context.params.id));
+    if (!user) throw notFound('User');
+
+    const input = userSchema.parse(context.body);
+    const username = input.username.toLowerCase();
+    if (data.users.some((row) => row.id !== user.id && row.username === username)) {
+      throw new LocalApiError(409, 'That username is already taken.');
+    }
+    // Never let the last administrator lock everyone out of the data.
+    const admins = data.users.filter((row) => row.role === 'ADMIN' && row.active);
+    if (user.role === 'ADMIN' && admins.length <= 1 && (input.role !== 'ADMIN' || !input.active)) {
+      throw badRequest('At least one active administrator must remain.');
+    }
+
+    user.username = username;
+    user.fullName = input.fullName;
+    user.role = input.role;
+    user.active = input.active;
+    if (input.password) user.passwordHash = await hashPassword(input.password);
+    user.updatedAt = new Date();
+    save('users');
+    logActivity(actor.username, 'UPDATE', 'User', user.id, username);
+    return { id: user.id, username: user.username, fullName: user.fullName, role: user.role, active: user.active };
+  },
+
+  'DELETE /users/:id': (context: Context) => {
+    const actor = requireAdmin(context);
+    const data = db();
+    const id = Number(context.params.id);
+    const user = byId(data.users, id);
+    if (!user) throw notFound('User');
+    if (actor.id === id) throw badRequest('You cannot delete the account you are signed in with.');
+
+    const admins = data.users.filter((row) => row.role === 'ADMIN' && row.active);
+    if (user.role === 'ADMIN' && admins.length <= 1) throw badRequest('At least one administrator must remain.');
+
+    removeRows('users', (row: { id: number }) => row.id === id);
+    data.sessions = data.sessions.filter((session) => session.userId !== id);
+    save('sessions');
+    logActivity(actor.username, 'DELETE', 'User', id);
+    return { ok: true };
+  },
+
+  // ---------------------------------------------------------------- sync
+  'GET /sync/status': (context: Context) => {
+    requireUser(context);
+    return syncStatus();
+  },
+
+  'PUT /sync/settings': (context: Context) => {
+    const actor = requireAdmin(context);
+    const input = syncSettingsSchema.parse(context.body);
+    const current = syncMeta();
+    saveSyncMeta({
+      deviceName: input.deviceName,
+      owner: input.owner,
+      repo: input.repo,
+      branch: input.branch,
+      path: input.path,
+      autoSync: input.autoSync,
+      includePhotos: input.includePhotos,
+      // An empty token in the form means "keep the one already stored".
+      token: input.token ? input.token : current.token,
+      lastStatus: 'Connection saved. Use Sync now to exchange data.',
+    });
+    logActivity(actor.username, 'UPDATE', 'Sync', undefined, `${input.owner}/${input.repo}`);
+    return syncStatus();
+  },
+
+  'POST /sync/test': async (context: Context) => {
+    requireAdmin(context);
+    const input = syncSettingsSchema.parse(context.body);
+    const current = syncMeta();
+    const result = await testConnection({
+      deviceName: input.deviceName,
+      owner: input.owner,
+      repo: input.repo,
+      branch: input.branch,
+      path: input.path,
+      autoSync: input.autoSync,
+      includePhotos: input.includePhotos,
+      token: input.token ? input.token : current.token,
+    });
+    return result;
+  },
+
+  'POST /sync/pull': async (context: Context) => {
+    requireUser(context);
+    return pull();
+  },
+
+  'POST /sync/push': async (context: Context) => {
+    requireUser(context);
+    return push();
+  },
+
+  'POST /sync/now': async (context: Context) => {
+    requireUser(context);
+    return syncNow();
+  },
+
+  'DELETE /sync': (context: Context) => {
+    const actor = requireAdmin(context);
+    saveSyncMeta({
+      owner: '',
+      repo: '',
+      token: '',
+      autoSync: false,
+      remoteSha: null,
+      lastStatus: 'Disconnected from GitHub.',
+    });
+    logActivity(actor.username, 'DELETE', 'Sync');
+    return syncStatus();
+  },
+});

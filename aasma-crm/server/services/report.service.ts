@@ -15,6 +15,12 @@ export interface ReportColumn {
   width?: number;
 }
 
+/** What the reader is allowed to see; set from their role. */
+export interface ReportOptions {
+  /** False for a site account, which never sees the property book. */
+  properties?: boolean;
+}
+
 export interface ReportResult {
   key: string;
   title: string;
@@ -86,7 +92,7 @@ function sum(rows: Record<string, unknown>[], keys: string[]): Record<string, nu
   return totals;
 }
 
-export async function buildReport(key: string, query: ListQuery): Promise<ReportResult> {
+export async function buildReport(key: string, query: ListQuery, options?: ReportOptions): Promise<ReportResult> {
   const definition = REPORTS.find((report) => report.key === key);
   if (!definition) {
     throw new Error(`Unknown report: ${key}`);
@@ -133,7 +139,9 @@ export async function buildReport(key: string, query: ListQuery): Promise<Report
           { key: 'source', header: 'Source', width: 14 },
           { key: 'budget', header: 'Budget', type: 'money', width: 16 },
           { key: 'project', header: 'Project', width: 20 },
-          { key: 'interested', header: 'Interested Unit', width: 16 },
+          ...(options?.properties === false
+            ? []
+            : [{ key: 'interested', header: 'Interested Unit', width: 16 } as ReportColumn]),
           { key: 'status', header: 'Status', width: 14 },
           { key: 'followUpDate', header: 'Follow-up', type: 'date', width: 14 },
           { key: 'assignedTo', header: 'Owner', width: 16 },

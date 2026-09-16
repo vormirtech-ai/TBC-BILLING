@@ -99,7 +99,7 @@ export const DOCUMENT_CATEGORIES = ['AGREEMENT', 'KYC', 'RECEIPT', 'PLAN', 'OTHE
 
 export const INTERACTION_TYPES = ['NOTE', 'CALL', 'MEETING', 'SITE_VISIT', 'PAYMENT', 'DOCUMENT'] as const;
 
-export const USER_ROLES = ['ADMIN', 'MANAGER', 'ENGINEER'] as const;
+export const USER_ROLES = ['ADMIN', 'MANAGER', 'ENGINEER', 'USER'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const RISK_LEVELS = ['GREEN', 'YELLOW', 'RED'] as const;

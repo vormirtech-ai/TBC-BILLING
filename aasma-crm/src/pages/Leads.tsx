@@ -33,6 +33,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useListState } from '@/hooks/useListState';
+import { useAuth } from '@/store/auth.store';
+import { capabilitiesFor } from '@shared/permissions';
 import { useResource } from '@/hooks/useResource';
 import { ApiError, api } from '@/lib/api';
 import { dateInput, formatDate, money } from '@/lib/format';
@@ -74,6 +76,7 @@ const emptyLead: LeadInput = {
 
 export function LeadsPage(): JSX.Element {
   const list = useListState({ sortBy: 'createdAt', sortDir: 'desc' });
+  const allowed = capabilitiesFor(useAuth((state) => state.user?.role));
   const [view, setView] = useState<'table' | 'pipeline'>('table');
   const [editing, setEditing] = useState<Lead | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -168,11 +171,13 @@ export function LeadsPage(): JSX.Element {
         header: 'Budget',
         cell: ({ row }) => <span className="tabular">{money(row.original.budget, { compact: true })}</span>,
       },
+      // The unit someone is interested in is part of the property book, so a
+      // site account sees the project instead.
       {
         id: 'interested',
-        header: 'Interested in',
+        header: allowed.properties ? 'Interested in' : 'Project',
         cell: ({ row }) =>
-          row.original.interestedProperty
+          allowed.properties && row.original.interestedProperty
             ? `${row.original.interestedProperty.tower}-${row.original.interestedProperty.unit}`
             : row.original.project?.name ?? '—',
       },
@@ -225,7 +230,7 @@ export function LeadsPage(): JSX.Element {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [allowed.properties],
   );
 
   const pipeline = useMemo(() => {

@@ -31,7 +31,10 @@ interface ReportResult {
 function renderCell(value: unknown, type?: ReportColumn['type']): string {
   if (value === null || value === undefined || value === '') return '—';
   if (type === 'money') return money(Number(value), { decimals: 2 });
-  if (type === 'number') return number(Number(value), 2);
+  if (type === 'number') {
+    const amount = Number(value);
+    return number(amount, Number.isInteger(amount) ? 0 : 2);
+  }
   if (type === 'percent') return `${Number(value).toFixed(1)}%`;
   if (type === 'date') return formatDate(String(value));
   return String(value);

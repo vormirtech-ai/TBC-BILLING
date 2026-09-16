@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, KeyRound, LogOut, Moon, Search, Sun } from 'lucide-react';
+import { Bell, Cloud, CloudOff, KeyRound, LogOut, Moon, RefreshCw, Search, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -14,9 +14,12 @@ import {
 import { GlobalSearch } from './GlobalSearch';
 import { useAuth } from '@/store/auth.store';
 import { useUi } from '@/store/ui.store';
-import { api } from '@/lib/api';
+import { useSync } from '@/store/sync.store';
+import { Tooltip } from '@/components/ui/misc';
+import { LOCAL_MODE, api } from '@/lib/api';
+import { roleLabel } from '@shared/permissions';
 import { initials } from '@/lib/utils';
-import { formatDate } from '@/lib/format';
+import { formatDate, fromNow } from '@/lib/format';
 import type { StockRow } from '@shared/types';
 
 interface Alerts {
@@ -32,6 +35,9 @@ export function Topbar(): JSX.Element {
   const logout = useAuth((state) => state.logout);
   const theme = useUi((state) => state.theme);
   const toggleTheme = useUi((state) => state.toggleTheme);
+  const syncStatus = useSync((state) => state.status);
+  const syncing = useSync((state) => state.busy);
+  const runSync = useSync((state) => state.run);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [alerts, setAlerts] = useState<Alerts | null>(null);
@@ -81,6 +87,42 @@ export function Topbar(): JSX.Element {
       </button>
 
       <div className="flex items-center gap-1.5">
+        {LOCAL_MODE ? (
+          <Tooltip
+            label={
+              syncStatus?.configured ? (
+                <span className="block max-w-56 space-y-0.5">
+                  <span className="block font-semibold">
+                    {syncStatus.owner}/{syncStatus.repo}
+                  </span>
+                  <span className="block">{syncStatus.lastStatus}</span>
+                  <span className="block text-muted-foreground">
+                    {syncStatus.lastSyncedAt ? `Last synced ${fromNow(syncStatus.lastSyncedAt)}` : 'Not synced yet'}
+                  </span>
+                </span>
+              ) : (
+                'Connect a GitHub repository in Settings → Sync to share data with the site team.'
+              )
+            }
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Sync with GitHub"
+              disabled={!syncStatus?.configured || syncing}
+              onClick={() => void runSync('now')}
+            >
+              {syncing ? (
+                <RefreshCw className="h-[1.15rem] w-[1.15rem] animate-spin text-primary" />
+              ) : syncStatus?.configured ? (
+                <Cloud className="h-[1.15rem] w-[1.15rem]" />
+              ) : (
+                <CloudOff className="h-[1.15rem] w-[1.15rem] text-muted-foreground" />
+              )}
+            </Button>
+          </Tooltip>
+        ) : null}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative" aria-label="Alerts">
@@ -145,7 +187,7 @@ export function Topbar(): JSX.Element {
               </span>
               <span className="hidden text-left leading-tight sm:block">
                 <span className="block text-sm font-semibold">{user?.fullName}</span>
-                <span className="block text-[0.7rem] text-muted-foreground">{user?.role}</span>
+                <span className="block text-[0.7rem] text-muted-foreground">{roleLabel(user?.role)}</span>
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -154,7 +196,7 @@ export function Topbar(): JSX.Element {
               <span className="block text-sm font-semibold text-foreground">{user?.fullName}</span>
               <span className="block text-xs font-normal text-muted-foreground">@{user?.username}</span>
               <Badge variant="secondary" className="mt-2">
-                {user?.role}
+                {roleLabel(user?.role)}
               </Badge>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

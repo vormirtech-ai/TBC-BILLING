@@ -349,6 +349,43 @@ export const settingsSchema = z.object({
   followUpReminderDays: z.coerce.number().int().min(0).max(30).default(3),
 });
 
+// ------------------------------------------------------------------ sync
+
+/**
+ * The GitHub connection used to share data between the office and site
+ * machines. The token is a fine-grained personal access token with Contents
+ * read and write on one repository — it is stored on the device that entered it
+ * and is sent only to api.github.com.
+ */
+export const syncSettingsSchema = z.object({
+  deviceName: z
+    .string()
+    .trim()
+    .max(60)
+    .optional()
+    .nullable()
+    .transform((value) => value ?? ''),
+  owner: requiredText('GitHub user or organisation', 100).regex(
+    /^[A-Za-z0-9-_.]+$/,
+    'Use the account name exactly as it appears in the repository address',
+  ),
+  repo: requiredText('Repository', 120).regex(/^[A-Za-z0-9-_.]+$/, 'Use the repository name only, without the owner'),
+  branch: z.string().trim().min(1).max(100).default('main'),
+  path: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(/^[A-Za-z0-9-_./]+\.json$/, 'Use a path ending in .json, for example data/crm-data.json')
+    .default('crm-data.json'),
+  /** Blank means "keep the token already saved on this device". */
+  token: z.string().trim().max(400).optional().default(''),
+  autoSync: z.coerce.boolean().default(false),
+  includePhotos: z.coerce.boolean().default(false),
+});
+
+export type SyncSettingsInput = z.input<typeof syncSettingsSchema>;
+
 // ------------------------------------------------------------------ queries
 
 export const listQuerySchema = z.object({

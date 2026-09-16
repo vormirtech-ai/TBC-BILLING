@@ -19,12 +19,16 @@ import { Logo } from './Logo';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/misc';
 import { useUi } from '@/store/ui.store';
+import { useAuth } from '@/store/auth.store';
+import { capabilitiesFor } from '@shared/permissions';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Only shown to roles that hold this capability. */
+  requires?: 'properties';
 }
 
 const SECTIONS: { title: string; items: NavItem[] }[] = [
@@ -43,7 +47,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: 'Construction',
     items: [
       { to: '/projects', label: 'Projects', icon: Building2 },
-      { to: '/properties', label: 'Properties', icon: HardHat },
+      { to: '/properties', label: 'Properties', icon: HardHat, requires: 'properties' },
       { to: '/inventory', label: 'Inventory', icon: Package },
       { to: '/labour', label: 'Labour', icon: ClipboardList },
       { to: '/dpr', label: 'DPR', icon: FileSpreadsheet },
@@ -65,6 +69,14 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
 export function Sidebar(): JSX.Element {
   const collapsed = useUi((state) => state.sidebarCollapsed);
   const toggleSidebar = useUi((state) => state.toggleSidebar);
+  const role = useAuth((state) => state.user?.role);
+  const allowed = capabilitiesFor(role);
+
+  // A section with nothing left in it for this role disappears entirely.
+  const sections = SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => !item.requires || allowed[item.requires]),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <aside
@@ -78,7 +90,7 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {SECTIONS.map((section) => (
+        {sections.map((section) => (
           <div key={section.title} className="space-y-1">
             {!collapsed ? (
               <p className="px-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-sidebar-muted">

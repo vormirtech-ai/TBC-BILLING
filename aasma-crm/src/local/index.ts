@@ -1,7 +1,10 @@
 import { db, flush, loadDatabase, save } from './db';
 import { ensureAdminUser } from './auth';
 import { buildDemoData } from './seed';
+import { saveSyncMeta, syncMeta } from './sync';
 import { describeError, handlers, readSettings, type Context } from './handlers';
+import { userForToken } from './auth';
+import { capabilitiesFor } from '@shared/permissions';
 import { buildReport } from './services/reports';
 import { reportFileName, reportToBlob } from './services/excel';
 import type { Query } from './query';
@@ -100,6 +103,7 @@ export function bootstrapLocalApi(): Promise<void> {
         'dprMaterials',
         'settings',
       );
+      saveSyncMeta({ demoData: true });
       await flush();
     }
   })();
@@ -135,6 +139,15 @@ export async function localRequest<T>(request: LocalRequest): Promise<T> {
       form: request.form,
       token: request.token,
     });
+
+    // The moment someone enters real data, this is no longer a sample database
+    // and joining a repository merges rather than replaces. Signing in, syncing
+    // and taking a backup do not count as entering data.
+    const housekeeping = /^\/(auth|sync|backups)\b/.test(request.path);
+    if (request.method !== 'GET' && !housekeeping && syncMeta().demoData) {
+      saveSyncMeta({ demoData: false });
+    }
+
     await flush();
     return JSON.parse(JSON.stringify(result ?? null)) as T;
   } catch (error) {
@@ -153,7 +166,12 @@ export async function localDownload(
 
   const reportMatch = /^\/reports\/([A-Za-z0-9_-]+)\/export$/.exec(path);
   if (reportMatch) {
-    const report = buildReport(reportMatch[1], query);
+    const viewer = userForToken(token);
+    const allowed = capabilitiesFor(viewer?.role);
+    if (reportMatch[1] === 'properties' && !allowed.properties) {
+      throw describeError(new Error('Only an administrator can export the property report.'));
+    }
+    const report = buildReport(reportMatch[1], query, { properties: allowed.properties });
     const settings = readSettings();
     return {
       blob: await reportToBlob(report, {

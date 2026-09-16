@@ -10,11 +10,15 @@ import {
   FolderOpen,
   HardDrive,
   KeyRound,
+  RefreshCw,
   RotateCcw,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { PageHeader } from '@/components/app/PageHeader';
 import { ConfirmDialog } from '@/components/app/ConfirmDialog';
+import { SyncSettings } from '@/components/app/SyncSettings';
+import { UserSettings } from '@/components/app/UserSettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
@@ -25,6 +29,7 @@ import { ApiError, LOCAL_MODE, api, downloadFile } from '@/lib/api';
 import { bytes, formatDateTime } from '@/lib/format';
 import { setCurrencySymbol } from '@/lib/format';
 import { useAuth } from '@/store/auth.store';
+import { capabilitiesFor } from '@shared/permissions';
 import { changePasswordSchema, settingsSchema, type ChangePasswordInput, type SettingsInput } from '@shared/schemas';
 import type { BackupFile } from '@shared/types';
 
@@ -45,6 +50,7 @@ declare global {
 export function SettingsPage(): JSX.Element {
   const [params, setParams] = useSearchParams();
   const user = useAuth((state) => state.user);
+  const allowed = capabilitiesFor(user?.role);
   const tab = params.get('tab') ?? 'company';
 
   const settings = useResource<SettingsInput>((signal) => api.get('/settings', undefined, signal));
@@ -137,6 +143,18 @@ export function SettingsPage(): JSX.Element {
             <DatabaseBackup className="h-4 w-4" />
             Backup &amp; restore
           </TabsTrigger>
+          {LOCAL_MODE && allowed.manageSync ? (
+            <TabsTrigger value="sync">
+              <RefreshCw className="h-4 w-4" />
+              Sync
+            </TabsTrigger>
+          ) : null}
+          {allowed.manageUsers ? (
+            <TabsTrigger value="users">
+              <Users className="h-4 w-4" />
+              Accounts
+            </TabsTrigger>
+          ) : null}
           <TabsTrigger value="about">
             <HardDrive className="h-4 w-4" />
             About
@@ -358,6 +376,18 @@ export function SettingsPage(): JSX.Element {
             </div>
           </div>
         </TabsContent>
+
+        {LOCAL_MODE && allowed.manageSync ? (
+          <TabsContent value="sync">
+            <SyncSettings />
+          </TabsContent>
+        ) : null}
+
+        {allowed.manageUsers ? (
+          <TabsContent value="users">
+            <UserSettings />
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="about">
           <Card>

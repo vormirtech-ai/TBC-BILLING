@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { asyncHandler } from '../lib/errors';
 import type { AuthedRequest } from '../lib/auth';
+import { capabilitiesFor } from '../../shared/permissions';
 import type { GlobalSearchHit } from '../../shared/types';
 
 export const searchRouter = Router();
@@ -19,6 +20,7 @@ searchRouter.get(
       return;
     }
     const take = 6;
+    const allowed = capabilitiesFor(req.user?.role);
 
     const [leads, clients, properties, projects, workers, materials, dprs] = await Promise.all([
       prisma.lead.findMany({
@@ -65,7 +67,7 @@ searchRouter.get(
         subtitle: `Client • ${row.phone}`,
         href: `/clients/${row.id}`,
       })),
-      ...properties.map((row) => ({
+      ...(allowed.properties ? properties : []).map((row) => ({
         type: 'property' as const,
         id: row.id,
         title: `${row.tower}-${row.unit}`,

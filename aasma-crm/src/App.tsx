@@ -20,9 +20,11 @@ import { ReportsPage } from '@/pages/Reports';
 import { ForecastingPage } from '@/pages/Forecasting';
 import { SettingsPage } from '@/pages/Settings';
 import { useAuth } from '@/store/auth.store';
+import { capabilitiesFor } from '@shared/permissions';
 import { useUi } from '@/store/ui.store';
 import { LOCAL_MODE, api, getToken, setUnauthorizedHandler } from '@/lib/api';
 import { setCurrencySymbol } from '@/lib/format';
+import { useAutoSync } from '@/hooks/useAutoSync';
 
 function BootScreen(): JSX.Element {
   return (
@@ -43,7 +45,10 @@ const Router = LOCAL_MODE ? HashRouter : BrowserRouter;
 
 export default function App(): JSX.Element {
   const status = useAuth((state) => state.status);
+  const role = useAuth((state) => state.user?.role);
+  const allowed = capabilitiesFor(role);
   const restore = useAuth((state) => state.restore);
+  useAutoSync();
   const logout = useAuth((state) => state.logout);
   const theme = useUi((state) => state.theme);
   const setTheme = useUi((state) => state.setTheme);
@@ -87,7 +92,10 @@ export default function App(): JSX.Element {
                 <Route path="/clients/:id" element={<ClientDetailPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
-                <Route path="/properties" element={<PropertiesPage />} />
+                <Route
+                  path="/properties"
+                  element={allowed.properties ? <PropertiesPage /> : <Navigate to="/" replace />}
+                />
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/labour" element={<LabourPage />} />
                 <Route path="/dpr" element={<DprPage />} />

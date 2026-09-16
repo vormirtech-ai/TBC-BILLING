@@ -90,6 +90,7 @@ only works when the project sits at the repository root.
 | Backup format | `CRM_Backup_*.db` | `CRM_Backup_*.json` (same buttons) |
 | DPR photos | `uploads/` folder | Stored inside the browser database |
 | Sign-in | Checked by the local server | A lock on a shared desktop, not a security boundary |
+| Sharing between computers | Copy the `.db` file | GitHub sync, per record (section 1c) |
 | Works offline | Always | Yes, after the first visit (service worker) |
 | Modules, reports, Excel export, forecasting | All of them | All of them, identical |
 
@@ -107,6 +108,94 @@ host the Express build on a small server instead of using Pages.
 The first time the app is opened in a browser it creates the administrator
 (`admin` / `admin@123`) and loads the same sample data as the desktop build, so
 the screens are never empty.
+
+---
+
+## 1c. How the office and the site share data
+
+```
+                        ┌──────────────────────┐
+                        │        GitHub        │
+                        │   crm-data.json in   │
+                        │  a private repo      │
+                        └──────────┬───────────┘
+                        pull │            │ pull
+                        push ▼            ▼ push
+            ┌────────────────────┐   ┌────────────────────┐
+            │       Admin        │   │        User        │
+            │  works offline,    │   │  works offline,    │
+            │  data stored       │   │  data stored       │
+            │  on this computer  │   │  on this computer  │
+            └────────────────────┘   └────────────────────┘
+```
+
+Each computer keeps its own complete copy and keeps working with no connection.
+Syncing exchanges that copy with **one JSON file in a private GitHub
+repository**, so the office and the site end up with the same records.
+
+### Turning it on
+
+1. Create a **private** repository, for example `aasma-crm-data`. Leave it empty.
+2. On GitHub: **Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens**. Create a token for that one repository with
+   **Contents: Read and write**.
+3. In the CRM: **Settings → Sync**, fill in the owner, repository and token,
+   press **Test connection**, then **Save connection**.
+4. Press **Sync now**. The first sync creates the data file.
+5. Repeat steps 3–4 on every other computer, using the same repository.
+
+A computer that still holds only the first-run sample data replaces it with the
+shared records the first time it syncs, and asks you to sign in again with an
+account from the shared data — so you never end up with two sets of sample
+records. After that, syncing merges.
+
+### What happens when two people work at the same time
+
+Nothing is overwritten. Merging is per record, not per file:
+
+* every record carries a hidden id that both computers agree on;
+* when the same record was edited in both places, the later edit wins;
+* deletions are remembered, so a deleted record is not brought back by the other
+  computer;
+* if someone writes to GitHub between this device reading and writing, the
+  change is pulled in and the write is retried.
+
+The cloud button in the header syncs on demand and shows when the last exchange
+happened. With **Sync automatically** on (the default), each computer also syncs
+after signing in, when the window is brought back to the front, and every five
+minutes — never more than once a minute.
+
+Site photos are **not** shared by default, because they make the file large and
+every sync slower. Turn on **Include site photos** if you want them shared too.
+
+### About the token
+
+It is stored on the computer where it was entered and is sent nowhere except
+`github.com`. Anyone who can use that computer profile can reach it, so use a
+fine-grained token limited to the one data repository — never a token with
+access to everything. If a laptop is lost, revoke that token on GitHub.
+
+---
+
+## 1d. Accounts and what each role sees
+
+Create accounts in **Settings → Accounts** (administrator only). They sync to
+the other computers like any other record.
+
+| Area | Administrator | User |
+| --- | --- | --- |
+| Dashboard, leads, clients | Yes | Yes |
+| Projects, inventory, labour, DPR | Yes | Yes |
+| Reports, Excel export, forecasting | Yes | Yes, except the property report |
+| **Properties: unit listing and tower map** | Yes | **No** |
+| **Property prices, rates and inventory value** | Yes | **No** |
+| Accounts and GitHub sync settings | Yes | No |
+
+For a user account the Properties menu is not shown, the address is redirected
+if typed by hand, the available-units tile and the interested-unit column are
+left out, and the property report is not offered. This is enforced in the API as
+well as the interface, in both the desktop and hosted builds — hiding a menu
+item is not the same as refusing the request.
 
 ---
 

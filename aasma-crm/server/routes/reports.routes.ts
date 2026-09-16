@@ -1,27 +1,39 @@
 import { Router } from 'express';
-import { asyncHandler, badRequest } from '../lib/errors';
+import { HttpError, asyncHandler, badRequest } from '../lib/errors';
 import type { AuthedRequest } from '../lib/auth';
 import { parseListQuery } from '../lib/query';
 import { getSettings } from '../lib/settings';
 import { logActivity } from '../lib/activity';
 import { REPORTS, buildReport } from '../services/report.service';
+import { capabilitiesFor } from '../../shared/permissions';
 import { reportFileName, reportToWorkbook, workbookBuffer } from '../services/excel.service';
 
 export const reportsRouter = Router();
 
 reportsRouter.get(
   '/',
-  asyncHandler<AuthedRequest>(async (_req, res) => {
-    res.json(REPORTS);
+  asyncHandler<AuthedRequest>(async (req, res) => {
+    const allowed = capabilitiesFor(req.user?.role);
+    res.json(REPORTS.filter((report) => allowed.properties || report.key !== 'properties'));
   }),
 );
+
+/** Refuses a report this role is not allowed to see. */
+function assertReportAllowed(req: AuthedRequest, key: string): void {
+  if (key === 'properties' && !capabilitiesFor(req.user?.role).properties) {
+    throw new HttpError(403, 'Only an administrator can open the property report.');
+  }
+}
 
 reportsRouter.get(
   '/:key',
   asyncHandler<AuthedRequest>(async (req, res) => {
     const key = String(req.params.key);
     if (!REPORTS.some((report) => report.key === key)) throw badRequest('Unknown report.');
-    res.json(await buildReport(key, parseListQuery(req)));
+    assertReportAllowed(req, key);
+    res.json(
+      await buildReport(key, parseListQuery(req), { properties: capabilitiesFor(req.user?.role).properties }),
+    );
   }),
 );
 
@@ -31,8 +43,11 @@ reportsRouter.get(
   asyncHandler<AuthedRequest>(async (req, res) => {
     const key = String(req.params.key);
     if (!REPORTS.some((report) => report.key === key)) throw badRequest('Unknown report.');
+    assertReportAllowed(req, key);
 
-    const report = await buildReport(key, parseListQuery(req));
+    const report = await buildReport(key, parseListQuery(req), {
+      properties: capabilitiesFor(req.user?.role).properties,
+    });
     const settings = await getSettings();
     const workbook = await reportToWorkbook(report, settings);
     const buffer = await workbookBuffer(workbook);

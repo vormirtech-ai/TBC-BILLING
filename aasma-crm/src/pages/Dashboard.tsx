@@ -36,6 +36,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/misc';
 import { useResource } from '@/hooks/useResource';
+import { useAuth } from '@/store/auth.store';
+import { capabilitiesFor } from '@shared/permissions';
 import { api } from '@/lib/api';
 import { formatDate, money, number, percent } from '@/lib/format';
 import { CHART_COLORS } from '@shared/constants';
@@ -50,6 +52,7 @@ interface Alerts {
 
 export function DashboardPage(): JSX.Element {
   const navigate = useNavigate();
+  const allowed = capabilitiesFor(useAuth((state) => state.user?.role));
   const summary = useResource<DashboardSummary>((signal) => api.get('/dashboard/summary', undefined, signal));
   const charts = useResource<DashboardCharts>((signal) => api.get('/dashboard/charts', undefined, signal));
   const alerts = useResource<Alerts>((signal) => api.get('/dashboard/alerts', undefined, signal));
@@ -127,13 +130,15 @@ export function DashboardPage(): JSX.Element {
           tone="warning"
           delay={0.12}
         />
-        <StatCard
-          label="Available units"
-          value={number(data?.propertiesAvailable)}
-          hint={`${number(data?.propertiesReserved)} reserved • ${number(data?.propertiesSold)} sold`}
-          icon={<HardHat className="h-5 w-5" />}
-          delay={0.16}
-        />
+        {allowed.properties ? (
+          <StatCard
+            label="Available units"
+            value={number(data?.propertiesAvailable)}
+            hint={`${number(data?.propertiesReserved)} reserved • ${number(data?.propertiesSold)} sold`}
+            icon={<HardHat className="h-5 w-5" />}
+            delay={0.16}
+          />
+        ) : null}
         <StatCard
           label="Today's attendance"
           value={number(data?.attendanceToday.present)}
