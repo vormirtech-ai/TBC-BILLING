@@ -209,24 +209,26 @@ export function SyncSettings(): JSX.Element {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <p className="flex items-center gap-2">
-              {status?.configured ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 text-success" />
+            {status?.configured ? (
+              <>
+                <p className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
                   <span className="font-medium">
                     {status.owner}/{status.repo}
                   </span>
-                </>
-              ) : (
-                <span className="text-muted-foreground">Not connected yet.</span>
-              )}
-            </p>
-            <p className="text-muted-foreground">{status?.lastStatus}</p>
-            {status?.lastSyncedAt ? (
-              <p className="text-xs text-muted-foreground">
-                Last synced {fromNow(status.lastSyncedAt)} • {formatDateTime(status.lastSyncedAt)}
+                </p>
+                <p className="text-muted-foreground">{status.lastStatus}</p>
+                {status.lastSyncedAt ? (
+                  <p className="text-xs text-muted-foreground">
+                    Last synced {fromNow(status.lastSyncedAt)} • {formatDateTime(status.lastSyncedAt)}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-muted-foreground">
+                Not connected yet. Fill in the repository and token on the left, save, then press Sync now.
               </p>
-            ) : null}
+            )}
 
             <div className="grid gap-2 pt-1">
               <Button disabled={!status?.configured || busy} loading={busy} onClick={() => void run('now')}>
@@ -252,7 +254,10 @@ export function SyncSettings(): JSX.Element {
             <CardTitle>Setting this up</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <p>1. Create a <strong className="text-foreground">private</strong> repository, for example <code>aasma-crm-data</code>.</p>
+            <p>
+              1. Create a <strong className="text-foreground">private</strong> repository, for example{' '}
+              <code>aasma-crm-data</code>. Ticking “Add a README file” is the easiest start.
+            </p>
             <p>
               2. On GitHub, open Settings → Developer settings → Personal access tokens → Fine-grained tokens, and
               create one for that repository with <strong className="text-foreground">Contents: Read and write</strong>.

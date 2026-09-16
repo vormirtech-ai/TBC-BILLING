@@ -243,15 +243,23 @@ async function writeRemote(meta: StoredMeta, document: SyncDocument, sha: string
     );
   }
 
-  const response = await request(meta, contentsUrl(meta), {
+  const commit = {
+    message: `CRM sync from ${meta.deviceName || 'a device'} — ${new Date().toISOString()}`,
+    content: encodeBase64(body),
+    ...(sha ? { sha } : {}),
+  };
+
+  let response = await request(meta, contentsUrl(meta), {
     method: 'PUT',
-    body: JSON.stringify({
-      message: `CRM sync from ${meta.deviceName || 'a device'} — ${new Date().toISOString()}`,
-      content: encodeBase64(body),
-      branch: meta.branch,
-      ...(sha ? { sha } : {}),
-    }),
+    body: JSON.stringify({ ...commit, branch: meta.branch }),
   });
+
+  // A repository created without a README has no commits at all, so the branch
+  // does not exist yet. Writing without naming one lets GitHub make the first
+  // commit on the default branch.
+  if (response.status === 404 && !sha) {
+    response = await request(meta, contentsUrl(meta), { method: 'PUT', body: JSON.stringify(commit) });
+  }
 
   if (!response.ok) throw describeFailure(response.status, await response.text());
   const payload = (await response.json()) as { content?: { sha?: string } };
