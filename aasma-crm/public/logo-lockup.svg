@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" role="img" aria-label="Aasma Construction">
+  <defs>
+    <linearGradient id="lc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#EE3A43"/>
+      <stop offset="100%" stop-color="#BC1F43"/>
+    </linearGradient>
+    <linearGradient id="ls" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="55%" stop-color="#C7C8CA"/>
+      <stop offset="100%" stop-color="#818286"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(8 14) scale(0.25)">
+    <path d="M96 168 176 122v268l-80 46z" fill="#8E1533"/>
+    <path d="M176 122l88 50v218l-88-0z" fill="url(#lc)"/>
+    <path d="M176 122 264 72l88 50-88 50z" fill="url(#ls)"/>
+    <path d="M264 172l88-50v268l-88 0z" fill="none" stroke="#C7C8CA" stroke-width="12" stroke-linejoin="round"/>
+    <rect x="96" y="404" width="320" height="18" rx="4" fill="#BC1F43"/>
+  </g>
+  <text x="140" y="86" font-family="'Proxima Nova','Montserrat','Segoe UI',sans-serif" font-size="58" font-weight="700" fill="#231F20">Aasma</text>
+  <text x="142" y="118" font-family="'Proxima Nova','Montserrat','Segoe UI',sans-serif" font-size="21" letter-spacing="7" fill="#818286">CONSTRUCTION</text>
+  <rect x="452" y="102" width="46" height="10" rx="2" fill="#BC1F43"/>
+</svg>

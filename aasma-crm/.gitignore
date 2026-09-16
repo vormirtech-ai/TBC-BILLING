@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-electron/
+release/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
+backups/
+uploads/
+reports/*.xlsx
+.DS_Store
+*.log
+*.tsbuildinfo

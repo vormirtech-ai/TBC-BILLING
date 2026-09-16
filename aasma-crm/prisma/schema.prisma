@@ -1,0 +1,473 @@
+// Aasma Buildcon CRM — offline SQLite schema.
+//
+// SQLite does not support native enums, so status-style columns are strings that
+// are validated with Zod at the API boundary (see server/lib/enums.ts). Foreign
+// keys, unique constraints and indexes are declared here so the database stays
+// correct even if a row is written by a support script.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- core
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  fullName     String
+  role         String   @default("ADMIN") // ADMIN | MANAGER | ENGINEER
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([role])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  actor     String
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------- projects
+
+model Project {
+  id              Int      @id @default(autoincrement())
+  name            String
+  code            String   @unique
+  location        String
+  startDate       DateTime
+  expectedEndDate DateTime
+  actualEndDate   DateTime?
+  budget          Float    @default(0)
+  contractor      String?
+  engineer        String?
+  status          String   @default("ACTIVE") // PLANNED | ACTIVE | ON_HOLD | COMPLETED
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  stages        ProjectStage[]
+  milestones    Milestone[]
+  properties    Property[]
+  purchases     Purchase[]
+  usages        MaterialUsage[]
+  workers       Worker[]
+  attendances   Attendance[]
+  dprs          Dpr[]
+  forecasts     ForecastSnapshot[]
+  bookings      Booking[]
+  leads         Lead[]
+
+  @@index([status])
+}
+
+/// One row per construction stage (Foundation, Structure, Brick Work, ...).
+/// `weight` is the share of the whole project the stage represents; project
+/// progress is the weighted average of stage progress.
+model ProjectStage {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  name      String
+  weight    Float    @default(1)
+  progress  Float    @default(0) // 0..100
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  project  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  progressLogs StageProgressLog[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+/// Append-only history of stage progress. The forecasting engine reads this to
+/// work out the average progress per day.
+model StageProgressLog {
+  id        Int      @id @default(autoincrement())
+  stageId   Int
+  progress  Float
+  recordedOn DateTime
+  note      String?
+  createdAt DateTime @default(now())
+
+  stage ProjectStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([stageId, recordedOn])
+}
+
+model Milestone {
+  id          Int      @id @default(autoincrement())
+  projectId   Int
+  title       String
+  dueDate     DateTime
+  completedOn DateTime?
+  status      String   @default("PENDING") // PENDING | DONE | DELAYED
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, dueDate])
+}
+
+// ---------------------------------------------------------------- sales
+
+model Property {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  tower     String
+  floor     Int
+  unit      String
+  unitType  String   @default("2BHK")
+  sizeSqft  Float    @default(0)
+  price     Float    @default(0)
+  facing    String   @default("EAST")
+  status    String   @default("AVAILABLE") // AVAILABLE | RESERVED | SOLD
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+  leads    Lead[]
+
+  @@unique([projectId, tower, unit])
+  @@index([status])
+  @@index([projectId])
+}
+
+model Lead {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  phone               String
+  email               String?
+  source              String   @default("WALK_IN") // WALK_IN | REFERRAL | WEBSITE | CALL | BROKER | CAMPAIGN
+  budget              Float    @default(0)
+  interestedPropertyId Int?
+  projectId           Int?
+  followUpDate        DateTime?
+  status              String   @default("NEW") // NEW | CONTACTED | INTERESTED | SITE_VISIT | NEGOTIATION | WON | LOST
+  assignedTo          String?
+  notes               String?
+  convertedClientId   Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  interestedProperty Property? @relation(fields: [interestedPropertyId], references: [id], onDelete: SetNull)
+  project            Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  client             Client?   @relation(fields: [convertedClientId], references: [id], onDelete: SetNull)
+  activities         LeadActivity[]
+
+  @@index([status])
+  @@index([followUpDate])
+  @@index([phone])
+}
+
+model LeadActivity {
+  id        Int      @id @default(autoincrement())
+  leadId    Int
+  type      String   @default("NOTE") // NOTE | CALL | VISIT | STATUS_CHANGE | EMAIL
+  detail    String
+  happenedOn DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, happenedOn])
+}
+
+model Client {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String
+  email     String?
+  address   String?
+  panNo     String?
+  aadhaarNo String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings     Booking[]
+  payments     Payment[]
+  documents    Document[]
+  interactions Interaction[]
+  leads        Lead[]
+
+  @@index([phone])
+  @@index([name])
+}
+
+model Booking {
+  id             Int      @id @default(autoincrement())
+  clientId       Int
+  propertyId     Int
+  projectId      Int?
+  bookingDate    DateTime
+  agreementValue Float    @default(0)
+  bookingAmount  Float    @default(0)
+  status         String   @default("ACTIVE") // ACTIVE | CANCELLED | COMPLETED
+  agreementNo    String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  payments Payment[]
+  documents Document[]
+
+  @@index([clientId])
+  @@index([bookingDate])
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  clientId  Int
+  bookingId Int?
+  amount    Float
+  mode      String   @default("BANK") // CASH | BANK | CHEQUE | UPI | LOAN
+  paidOn    DateTime
+  reference String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([paidOn])
+}
+
+model Document {
+  id         Int      @id @default(autoincrement())
+  clientId   Int?
+  bookingId  Int?
+  title      String
+  category   String   @default("AGREEMENT") // AGREEMENT | KYC | RECEIPT | PLAN | OTHER
+  filePath   String
+  uploadedAt DateTime @default(now())
+
+  client  Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model Interaction {
+  id         Int      @id @default(autoincrement())
+  clientId   Int
+  type       String   @default("NOTE") // NOTE | CALL | MEETING | SITE_VISIT | PAYMENT | DOCUMENT
+  detail     String
+  happenedOn DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, happenedOn])
+}
+
+// ---------------------------------------------------------------- inventory
+
+model Material {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  category     String   @default("GENERAL") // CEMENT | SAND | STEEL | BRICKS | GRAVEL | PAINT | PIPES | ELECTRICAL | GENERAL
+  unit         String   @default("Nos")
+  openingStock Float    @default(0)
+  reorderLevel Float    @default(0)
+  rate         Float    @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  purchases   Purchase[]
+  usages      MaterialUsage[]
+  adjustments StockAdjustment[]
+  dprMaterials DprMaterial[]
+
+  @@index([category])
+}
+
+model Purchase {
+  id         Int      @id @default(autoincrement())
+  materialId Int
+  projectId  Int?
+  quantity   Float
+  rate       Float
+  amount     Float
+  supplier   String?
+  invoiceNo  String?
+  purchasedOn DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([materialId])
+  @@index([purchasedOn])
+}
+
+model MaterialUsage {
+  id         Int      @id @default(autoincrement())
+  materialId Int
+  projectId  Int
+  quantity   Float
+  usedOn     DateTime
+  issuedTo   String?
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, usedOn])
+  @@index([projectId, usedOn])
+}
+
+/// Positive quantity adds stock back (returns, corrections), negative removes it
+/// (damage, wastage).
+model StockAdjustment {
+  id         Int      @id @default(autoincrement())
+  materialId Int
+  quantity   Float
+  reason     String   @default("RETURN") // RETURN | DAMAGE | WASTAGE | CORRECTION
+  adjustedOn DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, adjustedOn])
+}
+
+// ---------------------------------------------------------------- labour
+
+model Worker {
+  id         Int      @id @default(autoincrement())
+  name       String
+  mobile     String?
+  skill      String   @default("HELPER") // MASON | CARPENTER | ELECTRICIAN | PLUMBER | PAINTER | HELPER | OPERATOR | SUPERVISOR
+  contractor String?
+  dailyWage  Float    @default(0)
+  projectId  Int?
+  active     Boolean  @default(true)
+  joinedOn   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  attendances Attendance[]
+
+  @@index([skill])
+  @@index([projectId])
+}
+
+model Attendance {
+  id            Int      @id @default(autoincrement())
+  workerId      Int
+  projectId     Int?
+  markedOn      DateTime
+  status        String   @default("PRESENT") // PRESENT | HALF_DAY | ABSENT
+  overtimeHours Float    @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  worker  Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([workerId, markedOn])
+  @@index([markedOn])
+  @@index([projectId, markedOn])
+}
+
+// ---------------------------------------------------------------- dpr
+
+model Dpr {
+  id            Int      @id @default(autoincrement())
+  projectId     Int
+  reportDate    DateTime
+  weather       String   @default("CLEAR") // CLEAR | CLOUDY | RAIN | STORM | HOT
+  workCompleted String
+  labourCount   Int      @default(0)
+  machinery     String?
+  siteIssues    String?
+  safetyNotes   String?
+  preparedBy    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  materials DprMaterial[]
+  photos    DprPhoto[]
+
+  @@unique([projectId, reportDate])
+  @@index([reportDate])
+}
+
+model DprMaterial {
+  id         Int   @id @default(autoincrement())
+  dprId      Int
+  materialId Int
+  quantity   Float
+
+  dpr      Dpr      @relation(fields: [dprId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([dprId])
+}
+
+model DprPhoto {
+  id       Int    @id @default(autoincrement())
+  dprId    Int
+  filePath String
+  caption  String?
+
+  dpr Dpr @relation(fields: [dprId], references: [id], onDelete: Cascade)
+
+  @@index([dprId])
+}
+
+// ---------------------------------------------------------------- forecasting
+
+/// A stored run of the forecasting engine, so trends can be charted over time
+/// without recomputing history.
+model ForecastSnapshot {
+  id                  Int      @id @default(autoincrement())
+  projectId           Int
+  runOn               DateTime @default(now())
+  progressPct         Float
+  avgDailyProgress    Float
+  estimatedCompletion DateTime?
+  delayDays           Int      @default(0)
+  riskLevel           String   @default("GREEN") // GREEN | YELLOW | RED
+  requiredLabour      Int      @default(0)
+  costProjection      Float    @default(0)
+  payload             String   @default("{}")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, runOn])
+}

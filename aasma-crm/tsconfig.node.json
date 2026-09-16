@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "sourceMap": true,
+    "composite": true,
+    "declaration": true,
+    "declarationDir": "dist-electron/types",
+    "rootDir": ".",
+    "outDir": "dist-electron",
+    "tsBuildInfoFile": "dist-electron/.tsbuildinfo"
+  },
+  "include": ["electron", "server", "shared", "prisma/seed.ts"]
+}
