@@ -31,7 +31,17 @@ import { capabilitiesFor, isAdmin } from '@shared/permissions';
 import type { GlobalSearchHit } from '@shared/types';
 import { db, newUid, nextId, parseDatabase, recordTombstone, replaceDatabase, save, serialiseDatabase } from './db';
 import { createSession, endSession, hashPassword, userForToken, verifyPassword } from './auth';
-import { pull, push, saveSyncMeta, syncMeta, syncNow, syncStatus, testConnection } from './sync';
+import {
+  pull,
+  push,
+  resetData,
+  saveSyncMeta,
+  syncMeta,
+  syncNow,
+  syncStatus,
+  testConnection,
+  type SyncSettings,
+} from './sync';
 import { byId, dayKey, endOfDay, listRows, round, startOfDay, type Query } from './query';
 import { stockRows } from './services/stock';
 import { dashboardAlerts, dashboardCharts, dashboardSummary } from './services/dashboard';
@@ -137,6 +147,30 @@ function removeRows<K extends TableName>(table: K, predicate: (row: Database[K][
   (data as unknown as Record<string, unknown[]>)[table] = rows.filter((row) => !predicate(row));
   save(table);
   return doomed.length;
+}
+
+/**
+ * Turns the saved form into a connection. A blank credential means "keep the one
+ * already on this device", so the token is never echoed back to the screen just
+ * to be sent again.
+ */
+function toSyncSettings(input: ReturnType<typeof syncSettingsSchema.parse>): SyncSettings {
+  const current = syncMeta();
+  return {
+    deviceName: input.deviceName,
+    provider: input.provider,
+    owner: input.owner,
+    repo: input.repo,
+    branch: input.branch,
+    path: input.path,
+    token: input.token ? input.token : current.token,
+    supabaseUrl: (input.supabaseUrl ?? '').replace(/\/+$/, ''),
+    supabaseKey: input.supabaseKey ? input.supabaseKey : (current.supabaseKey ?? ''),
+    supabaseTable: input.supabaseTable,
+    documentId: input.documentId,
+    autoSync: input.autoSync,
+    includePhotos: input.includePhotos,
+  };
 }
 
 const num = (value: unknown): number | null => {
@@ -2246,38 +2280,31 @@ Object.assign(handlers, {
   'PUT /sync/settings': (context: Context) => {
     const actor = requireAdmin(context);
     const input = syncSettingsSchema.parse(context.body);
-    const current = syncMeta();
     saveSyncMeta({
-      deviceName: input.deviceName,
-      owner: input.owner,
-      repo: input.repo,
-      branch: input.branch,
-      path: input.path,
-      autoSync: input.autoSync,
-      includePhotos: input.includePhotos,
-      // An empty token in the form means "keep the one already stored".
-      token: input.token ? input.token : current.token,
+      ...toSyncSettings(input),
       lastStatus: 'Connection saved. Use Sync now to exchange data.',
     });
-    logActivity(actor.username, 'UPDATE', 'Sync', undefined, `${input.owner}/${input.repo}`);
+    logActivity(
+      actor.username,
+      'UPDATE',
+      'Sync',
+      undefined,
+      input.provider === 'supabase' ? `${input.supabaseUrl} · ${input.supabaseTable}` : `${input.owner}/${input.repo}`,
+    );
     return syncStatus();
   },
 
   'POST /sync/test': async (context: Context) => {
     requireAdmin(context);
-    const input = syncSettingsSchema.parse(context.body);
-    const current = syncMeta();
-    const result = await testConnection({
-      deviceName: input.deviceName,
-      owner: input.owner,
-      repo: input.repo,
-      branch: input.branch,
-      path: input.path,
-      autoSync: input.autoSync,
-      includePhotos: input.includePhotos,
-      token: input.token ? input.token : current.token,
-    });
-    return result;
+    return testConnection(toSyncSettings(syncSettingsSchema.parse(context.body)));
+  },
+
+  'POST /sync/reset': async (context: Context) => {
+    const actor = requireAdmin(context);
+    const scope = (context.body as { scope?: string } | undefined)?.scope === 'everywhere' ? 'everywhere' : 'device';
+    const report = await resetData(scope);
+    logActivity(actor.username, 'RESET', 'Database', undefined, `${report.cleared} record(s), ${scope}`);
+    return report;
   },
 
   'POST /sync/pull': async (context: Context) => {

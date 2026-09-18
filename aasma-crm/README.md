@@ -90,7 +90,7 @@ only works when the project sits at the repository root.
 | Backup format | `CRM_Backup_*.db` | `CRM_Backup_*.json` (same buttons) |
 | DPR photos | `uploads/` folder | Stored inside the browser database |
 | Sign-in | Checked by the local server | A lock on a shared desktop, not a security boundary |
-| Sharing between computers | Copy the `.db` file | GitHub sync, per record (section 1c) |
+| Sharing between computers | Copy the `.db` file | Supabase or GitHub sync, per record (section 1c) |
 | Works offline | Always | Yes, after the first visit (service worker) |
 | Modules, reports, Excel export, forecasting | All of them | All of them, identical |
 
@@ -114,33 +114,77 @@ the screens are never empty.
 ## 1c. How the office and the site share data
 
 ```
-                        ┌──────────────────────┐
-                        │        GitHub        │
-                        │   crm-data.json in   │
-                        │  a private repo      │
-                        └──────────┬───────────┘
-                        pull │            │ pull
-                        push ▼            ▼ push
-            ┌────────────────────┐   ┌────────────────────┐
-            │       Admin        │   │        User        │
-            │  works offline,    │   │  works offline,    │
-            │  data stored       │   │  data stored       │
-            │  on this computer  │   │  on this computer  │
-            └────────────────────┘   └────────────────────┘
+                     ┌─────────────────────────────┐
+                     │   Supabase  or  GitHub      │
+                     │   one row  /  one JSON file │
+                     └──────────┬──────────────────┘
+                     pull │            │ pull
+                     push ▼            ▼ push
+         ┌────────────────────┐   ┌────────────────────┐
+         │       Admin        │   │        User        │
+         │  works offline,    │   │  works offline,    │
+         │  data stored       │   │  data stored       │
+         │  on this computer  │   │  on this computer  │
+         └────────────────────┘   └────────────────────┘
 ```
 
 Each computer keeps its own complete copy and keeps working with no connection.
-Syncing exchanges that copy with **one JSON file in a private GitHub
-repository**, so the office and the site end up with the same records.
+Syncing exchanges that copy with **one shared document**, so the office and the
+site end up with the same records. That document can live in either place —
+**Settings → Sync** offers both:
 
-### Turning it on
+| | Supabase *(recommended)* | GitHub |
+| --- | --- | --- |
+| Where the data sits | One row in a table, as `jsonb` | One JSON file in a private repo |
+| Concurrency | A version column on the row | The file's commit sha |
+| Speed | Instant | A commit per sync |
+| Side effects | None | Every sync is a commit in the history |
+| Credential | The project's anon key | A fine-grained token |
 
-1. Create a **private** repository, for example `aasma-crm-data`. Leave it empty.
+### Turning on Supabase
+
+1. Create a project at [supabase.com](https://supabase.com) — the free tier is
+   plenty for this.
+2. Open the **SQL editor** and run the table script (the **Copy SQL** button in
+   Settings → Sync puts it on the clipboard):
+
+   ```sql
+   create table if not exists crm_documents (
+     id          text primary key,
+     version     bigint not null default 1,
+     document    jsonb not null,
+     updated_at  timestamptz not null default now(),
+     updated_by  text
+   );
+
+   alter table crm_documents enable row level security;
+
+   create policy "crm_documents read"   on crm_documents for select using (true);
+   create policy "crm_documents insert" on crm_documents for insert with check (true);
+   create policy "crm_documents update" on crm_documents for update using (true) with check (true);
+   ```
+
+3. In **Project Settings → API**, copy the **Project URL** and the **anon
+   public** key.
+4. In the CRM: **Settings → Sync → Supabase**, paste both, press **Test
+   connection**, then **Save connection**, then **Sync now**.
+5. Repeat step 4 on every other computer, with the same project.
+
+Those policies let anyone holding the anon key read and write that one table, so
+**treat the key like a password**. It is stored on the computer where it was
+entered and sent nowhere except your Supabase project. Rotate it in Supabase if
+a laptop is lost. (If you later want per-person access, add Supabase Auth and
+rewrite the policies around `auth.uid()` — the app only needs the row.)
+
+### Turning on GitHub instead
+
+1. Create a **private** repository, for example `aasma-crm-data`. Ticking "Add a
+   README file" is the easiest start.
 2. On GitHub: **Settings → Developer settings → Personal access tokens →
    Fine-grained tokens**. Create a token for that one repository with
    **Contents: Read and write**.
-3. In the CRM: **Settings → Sync**, fill in the owner, repository and token,
-   press **Test connection**, then **Save connection**.
+3. In the CRM: **Settings → Sync → GitHub**, fill in the owner, repository and
+   token, press **Test connection**, then **Save connection**.
 4. Press **Sync now**. The first sync creates the data file.
 5. Repeat steps 3–4 on every other computer, using the same repository.
 
@@ -157,8 +201,9 @@ Nothing is overwritten. Merging is per record, not per file:
 * when the same record was edited in both places, the later edit wins;
 * deletions are remembered, so a deleted record is not brought back by the other
   computer;
-* if someone writes to GitHub between this device reading and writing, the
-  change is pulled in and the write is retried.
+* if someone writes between this device reading and writing — a changed row
+  version on Supabase, a moved commit sha on GitHub — the change is pulled in
+  and the write is retried.
 
 The cloud button in the header syncs on demand and shows when the last exchange
 happened. With **Sync automatically** on (the default), each computer also syncs
@@ -174,6 +219,25 @@ It is stored on the computer where it was entered and is sent nowhere except
 `github.com`. Anyone who can use that computer profile can reach it, so use a
 fine-grained token limited to the one data repository — never a token with
 access to everything. If a laptop is lost, revoke that token on GitHub.
+
+### Starting fresh
+
+**Settings → Backup & restore → Start fresh** erases the records so real entries
+can begin on an empty database. Accounts, company details, the sync connection
+and every backup already taken are kept — it erases the work, not the setup.
+You have to type ERASE to confirm, and there is a **Back up first** button in
+the same dialog.
+
+When the computers are synced there are two choices:
+
+* **Every computer** — clears here and marks the shared data as reset. The other
+  computers drop their copy on their next sync instead of merging the old
+  records back in.
+* **This computer only** — clears here. The shared records come back on the next
+  sync, which is the way to pull a clean copy down again.
+
+A device that has been erased stays erased: the sample data is only ever loaded
+into a browser that has never opened the app.
 
 ---
 

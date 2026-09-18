@@ -67,7 +67,13 @@ export function bootstrapLocalApi(): Promise<void> {
     await ensureAdminUser();
 
     const data = db();
-    if (data.projects.length === 0 && data.leads.length === 0 && data.materials.length === 0) {
+    const meta = syncMeta();
+    const empty = data.projects.length === 0 && data.leads.length === 0 && data.materials.length === 0;
+
+    // Only a browser that has never opened the app gets the sample data. An
+    // empty database on a browser that has been set up is empty on purpose —
+    // someone erased it to start entering real records.
+    if (empty && !meta.initialised) {
       buildDemoData(data);
       const defaults = {
         companyName: 'Aasma Construction',
@@ -103,7 +109,10 @@ export function bootstrapLocalApi(): Promise<void> {
         'dprMaterials',
         'settings',
       );
-      saveSyncMeta({ demoData: true });
+      saveSyncMeta({ demoData: true, initialised: true });
+      await flush();
+    } else if (!meta.initialised) {
+      saveSyncMeta({ initialised: true });
       await flush();
     }
   })();

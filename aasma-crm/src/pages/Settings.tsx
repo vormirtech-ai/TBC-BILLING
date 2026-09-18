@@ -18,6 +18,7 @@ import {
 import { PageHeader } from '@/components/app/PageHeader';
 import { ConfirmDialog } from '@/components/app/ConfirmDialog';
 import { SyncSettings } from '@/components/app/SyncSettings';
+import { ResetData } from '@/components/app/ResetData';
 import { UserSettings } from '@/components/app/UserSettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -352,6 +353,8 @@ export function SettingsPage(): JSX.Element {
                   </p>
                 </CardContent>
               </Card>
+
+              {allowed.manageUsers ? <ResetData /> : null}
 
               {window.aasma?.isDesktop ? (
                 <Card>

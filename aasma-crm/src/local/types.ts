@@ -41,21 +41,38 @@ export interface TombstoneRow {
   deletedAt: Date;
 }
 
-/** The GitHub connection and the state of the last exchange with it. */
+/** Where the shared copy of the data lives. */
+export type SyncProvider = 'github' | 'supabase';
+
+/** The connection to the shared data and the state of the last exchange. */
 export interface SyncMetaRow {
   key: 'sync';
   /** Identifies this browser in the sync log. */
   deviceId: string;
   deviceName: string;
+  provider: SyncProvider;
+  /** GitHub: a JSON file in a repository. */
   owner: string;
   repo: string;
   branch: string;
   path: string;
   token: string;
+  /** Supabase: one row in a table, held as jsonb. */
+  supabaseUrl: string;
+  supabaseKey: string;
+  supabaseTable: string;
+  documentId: string;
   autoSync: boolean;
+  /**
+   * Bumped when someone erases the data for everyone. A device holding an older
+   * generation drops its copy and takes the newer one instead of merging the
+   * records back in.
+   */
+  generation: number;
   lastSyncedAt: Date | null;
   lastPushedAt: Date | null;
   lastStatus: string;
+  /** The commit sha or row version the last exchange was based on. */
   remoteSha: string | null;
 }
 

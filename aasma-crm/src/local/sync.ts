@@ -1,14 +1,28 @@
 import { db, flush, newUid, nextId, reviveDates, save } from './db';
-import { RELATIONS, SYNCED_TABLES, type Database, type SyncMetaRow, type TableName, type TombstoneRow } from './types';
+import {
+  RELATIONS,
+  SYNCED_TABLES,
+  type Database,
+  type SyncMetaRow,
+  type SyncProvider,
+  type TableName,
+  type TombstoneRow,
+} from './types';
+import { probe as probeSupabase, readDocument, writeDocument, type SupabaseConfig } from './supabase';
 
 /**
- * Sharing data through a GitHub repository.
+ * Sharing data between computers.
  *
  * Each computer keeps its own copy of everything and works offline; syncing
- * exchanges that copy with one JSON file in a repository, so the administrator
- * and the site users end up with the same records. There is no server in the
- * middle — the browser talks to the GitHub API directly with a token the user
- * supplies, and that token never leaves the machine it was entered on.
+ * exchanges that copy with one shared document, so the administrator and the
+ * site users end up with the same records. Two places can hold that document:
+ *
+ *   - **Supabase** — one row in a table, with a version column for concurrency.
+ *   - **GitHub** — one JSON file in a private repository.
+ *
+ * Either way there is no server of our own in the middle: the browser talks to
+ * the service directly with a credential the user supplies, and that credential
+ * never leaves the machine it was entered on.
  *
  * Merging is per record rather than per file, so two people working at the same
  * time do not overwrite each other:
@@ -53,6 +67,11 @@ const MAX_DOCUMENT_BYTES = 40 * 1024 * 1024;
 export interface SyncDocument {
   format: string;
   version: number;
+  /**
+   * Raised when someone erases the data for everyone. A device holding a lower
+   * generation drops its records and takes these instead of merging.
+   */
+  generation?: number;
   updatedAt: string;
   device: string;
   tables: Partial<Record<TableName, Record<string, unknown>[]>>;
@@ -61,11 +80,16 @@ export interface SyncDocument {
 
 export interface SyncSettings {
   deviceName: string;
+  provider: SyncProvider;
   owner: string;
   repo: string;
   branch: string;
   path: string;
   token: string;
+  supabaseUrl: string;
+  supabaseKey: string;
+  supabaseTable: string;
+  documentId: string;
   autoSync: boolean;
   includePhotos: boolean;
 }
@@ -88,6 +112,12 @@ interface StoredMeta extends SyncMetaRow {
    * rather than merging two sets of demo records together.
    */
   demoData?: boolean;
+  /**
+   * Set once this browser has been through first-run setup. Without it an empty
+   * database looks like a fresh install, and erasing everything would be undone
+   * by the sample data being seeded again on the next load.
+   */
+  initialised?: boolean;
 }
 
 export function syncMeta(): StoredMeta {
@@ -98,14 +128,20 @@ export function syncMeta(): StoredMeta {
       key: 'sync',
       deviceId: newUid(),
       deviceName: '',
+      provider: 'supabase',
       owner: '',
       repo: '',
       branch: 'main',
       path: 'crm-data.json',
       token: '',
+      supabaseUrl: '',
+      supabaseKey: '',
+      supabaseTable: 'crm_documents',
+      documentId: 'aasma-crm',
       autoSync: true,
       includePhotos: false,
       demoData: false,
+      generation: 1,
       lastSyncedAt: null,
       lastPushedAt: null,
       lastStatus: 'Not connected yet.',
@@ -125,23 +161,50 @@ export function saveSyncMeta(patch: Partial<StoredMeta>): StoredMeta {
 }
 
 /** What the Settings screen shows; the token is never sent back to the page. */
+/** True when this device has everything it needs to reach the shared document. */
+export function isConfigured(meta: StoredMeta): boolean {
+  return meta.provider === 'supabase'
+    ? Boolean(meta.supabaseUrl && meta.supabaseKey && meta.supabaseTable)
+    : Boolean(meta.owner && meta.repo && meta.token);
+}
+
 export function syncStatus(): Record<string, unknown> {
   const meta = syncMeta();
   return {
-    configured: Boolean(meta.owner && meta.repo && meta.token),
+    configured: isConfigured(meta),
+    provider: meta.provider ?? 'github',
     deviceId: meta.deviceId,
     deviceName: meta.deviceName,
     owner: meta.owner,
     repo: meta.repo,
     branch: meta.branch,
     path: meta.path,
+    supabaseUrl: meta.supabaseUrl ?? '',
+    supabaseTable: meta.supabaseTable ?? 'crm_documents',
+    documentId: meta.documentId ?? 'aasma-crm',
     autoSync: meta.autoSync,
     includePhotos: meta.includePhotos ?? false,
     hasToken: Boolean(meta.token),
+    hasKey: Boolean(meta.supabaseKey),
+    generation: meta.generation ?? 1,
+    /** Where the shared data sits, for the status line. */
+    target:
+      meta.provider === 'supabase'
+        ? `${(meta.supabaseUrl ?? '').replace(/^https:\/\//, '').replace(/\/$/, '')} · ${meta.supabaseTable}`
+        : `${meta.owner}/${meta.repo}`,
     lastSyncedAt: meta.lastSyncedAt,
     lastPushedAt: meta.lastPushedAt,
     lastStatus: meta.lastStatus,
     remoteSha: meta.remoteSha,
+  };
+}
+
+function supabaseConfig(meta: StoredMeta): SupabaseConfig {
+  return {
+    url: meta.supabaseUrl ?? '',
+    key: meta.supabaseKey ?? '',
+    table: meta.supabaseTable || 'crm_documents',
+    documentId: meta.documentId || 'aasma-crm',
   };
 }
 
@@ -201,8 +264,37 @@ async function request(meta: StoredMeta, url: string, init: RequestInit & { acce
   return response;
 }
 
-/** Reads the shared file. A missing file simply means nothing has synced yet. */
-export async function fetchRemote(
+export interface RemoteSnapshot {
+  document: SyncDocument | null;
+  /** Commit sha on GitHub, row version on Supabase. */
+  revision: string | null;
+}
+
+/**
+ * Reads the shared document, whichever service holds it. Nothing there yet
+ * simply means this device will create it on the first push.
+ */
+export async function readRemote(meta: StoredMeta): Promise<RemoteSnapshot> {
+  if ((meta.provider ?? 'github') === 'supabase') {
+    const snapshot = await readDocument(supabaseConfig(meta));
+    if (snapshot.document && snapshot.document.format !== DOC_FORMAT) {
+      throw new SyncError(422, 'That row does not hold Aasma Buildcon CRM data.');
+    }
+    return snapshot;
+  }
+  const file = await fetchGithubFile(meta);
+  return { document: file.document, revision: file.sha };
+}
+
+async function writeRemote(meta: StoredMeta, document: SyncDocument, revision: string | null): Promise<string> {
+  if ((meta.provider ?? 'github') === 'supabase') {
+    return writeDocument(supabaseConfig(meta), document, revision, meta.deviceName || meta.deviceId);
+  }
+  return writeGithubFile(meta, document, revision);
+}
+
+/** Reads the shared file from GitHub. */
+async function fetchGithubFile(
   meta: StoredMeta,
 ): Promise<{ document: SyncDocument | null; sha: string | null }> {
   const url = `${contentsUrl(meta)}?ref=${encodeURIComponent(meta.branch)}`;
@@ -234,7 +326,7 @@ export async function fetchRemote(
   }
 }
 
-async function writeRemote(meta: StoredMeta, document: SyncDocument, sha: string | null): Promise<string> {
+async function writeGithubFile(meta: StoredMeta, document: SyncDocument, sha: string | null): Promise<string> {
   const body = JSON.stringify(document, null, 0);
   if (body.length > MAX_DOCUMENT_BYTES) {
     throw new SyncError(
@@ -291,6 +383,7 @@ export function buildDocument(includePhotos: boolean): SyncDocument {
   return {
     format: DOC_FORMAT,
     version: 1,
+    generation: meta.generation ?? 1,
     updatedAt: new Date().toISOString(),
     device: meta.deviceName || meta.deviceId,
     tables,
@@ -474,7 +567,7 @@ function dropSampleData(): void {
   }
   data.tombstones = [];
   data.sessions = [];
-  saveSyncMeta({ demoData: false });
+  saveSyncMeta({ demoData: false, initialised: true });
   save(...SYNCED_TABLES, 'tombstones', 'sessions');
 }
 
@@ -482,31 +575,73 @@ function dropSampleData(): void {
 
 function requireConfigured(): StoredMeta {
   const meta = syncMeta();
-  if (!meta.owner || !meta.repo || !meta.token) {
-    throw new SyncError(400, 'Add the repository and a GitHub token in Settings → Sync first.');
+  if (!isConfigured(meta)) {
+    throw new SyncError(
+      400,
+      meta.provider === 'supabase'
+        ? 'Add the Supabase project URL and key in Settings → Sync first.'
+        : 'Add the repository and a GitHub token in Settings → Sync first.',
+    );
   }
   return meta;
 }
 
+/** Where the shared data lives, for use in messages. */
+function targetName(meta: StoredMeta): string {
+  return (meta.provider ?? 'github') === 'supabase' ? 'Supabase' : 'GitHub';
+}
+
+/**
+ * Another device erased the data for everyone and raised the generation. This
+ * device drops what it holds and takes the newer set rather than merging its
+ * now-obsolete records back in.
+ */
+function adoptNewerGeneration(document: SyncDocument): boolean {
+  const meta = syncMeta();
+  const incoming = document.generation ?? 1;
+  if (incoming <= (meta.generation ?? 1)) return false;
+  dropSampleData();
+  saveSyncMeta({ generation: incoming });
+  return true;
+}
+
+/** True when this device's records are newer than the shared copy's generation. */
+function remoteIsStale(meta: StoredMeta, document: SyncDocument | null): boolean {
+  if (!document) return false;
+  return (document.generation ?? 1) < (meta.generation ?? 1);
+}
+
 export async function pull(): Promise<MergeReport & { found: boolean; signOutRequired: boolean }> {
   const meta = requireConfigured();
-  const { document, sha } = await fetchRemote(meta);
+  const { document, revision } = await readRemote(meta);
   if (!document) {
-    saveSyncMeta({ lastStatus: 'Nothing on GitHub yet — push to create the shared file.', remoteSha: null });
+    saveSyncMeta({
+      lastStatus: `Nothing on ${targetName(meta)} yet — push to create the shared data.`,
+      remoteSha: null,
+    });
     await flush();
     return { added: 0, updated: 0, removed: 0, skipped: 0, found: false, signOutRequired: false };
   }
 
-  const replacing = Boolean(meta.demoData) && hasContent(document);
-  if (replacing) dropSampleData();
+  if (remoteIsStale(meta, document)) {
+    saveSyncMeta({ lastStatus: 'The shared copy is older than this device — push to replace it.' });
+    await flush();
+    return { added: 0, updated: 0, removed: 0, skipped: 0, found: true, signOutRequired: false };
+  }
+
+  const superseded = adoptNewerGeneration(document);
+  const replacing = superseded || (Boolean(meta.demoData) && hasContent(document));
+  if (!superseded && replacing) dropSampleData();
 
   const report = mergeDocument(document);
   saveSyncMeta({
-    remoteSha: sha,
+    remoteSha: revision,
     lastSyncedAt: new Date(),
-    lastStatus: replacing
-      ? 'Sample data replaced with the records from GitHub.'
-      : `Pulled ${report.added} new and ${report.updated} updated record(s).`,
+    lastStatus: superseded
+      ? 'Took the records from the shared copy after it was reset.'
+      : replacing
+        ? `Sample data replaced with the records from ${targetName(meta)}.`
+        : `Pulled ${report.added} new and ${report.updated} updated record(s).`,
   });
   await flush();
   return { ...report, found: true, signOutRequired: replacing };
@@ -514,68 +649,83 @@ export async function pull(): Promise<MergeReport & { found: boolean; signOutReq
 
 export async function push(): Promise<{ sha: string }> {
   const meta = requireConfigured();
-  const { document, sha } = await fetchRemote(meta);
-  // Fold in anything that landed on GitHub since the last exchange, so a push
-  // never discards someone else's work.
-  if (document) mergeDocument(document);
+  const { document, revision } = await readRemote(meta);
+  // Fold in anything that landed since the last exchange, so a push never
+  // discards someone else's work — unless this device holds a newer generation,
+  // in which case those records are deliberately being replaced.
+  if (document && !remoteIsStale(meta, document)) {
+    if (!adoptNewerGeneration(document)) mergeDocument(document);
+  }
 
   const outgoing = buildDocument(meta.includePhotos ?? false);
-  const newSha = await writeRemote(meta, outgoing, sha);
+  const newRevision = await writeRemote(meta, outgoing, revision);
   saveSyncMeta({
-    remoteSha: newSha,
+    remoteSha: newRevision,
     lastPushedAt: new Date(),
     lastSyncedAt: new Date(),
     // Once this device's data is the shared data, it is no longer "just a sample".
     demoData: false,
-    lastStatus: 'This device is up to date with GitHub.',
+    lastStatus: `This device is up to date with ${targetName(meta)}.`,
   });
   await flush();
-  return { sha: newSha };
+  return { sha: newRevision };
 }
 
 /** Pull, merge, then push — what the Sync button does. */
 export async function syncNow(): Promise<MergeReport & { pushed: boolean; signOutRequired: boolean }> {
   const meta = requireConfigured();
-  const { document, sha } = await fetchRemote(meta);
+  const { document, revision } = await readRemote(meta);
 
-  const replacing = Boolean(meta.demoData) && Boolean(document) && hasContent(document!);
-  if (replacing) dropSampleData();
+  const stale = remoteIsStale(meta, document);
+  const superseded = !stale && document ? adoptNewerGeneration(document) : false;
+  const replacing = superseded || (Boolean(meta.demoData) && Boolean(document) && hasContent(document!));
+  if (!superseded && replacing) dropSampleData();
 
-  const report = document ? mergeDocument(document) : { added: 0, updated: 0, removed: 0, skipped: 0 };
+  const report = document && !stale ? mergeDocument(document) : { added: 0, updated: 0, removed: 0, skipped: 0 };
 
   const outgoing = buildDocument(meta.includePhotos ?? false);
-  let newSha: string;
+  let newRevision: string;
   try {
-    newSha = await writeRemote(meta, outgoing, sha);
+    newRevision = await writeRemote(meta, outgoing, revision);
   } catch (error) {
     // Someone wrote between the read and the write; take their version and retry once.
-    if (error instanceof SyncError && (error.status === 409 || error.status === 422)) {
-      const retry = await fetchRemote(meta);
-      if (retry.document) mergeDocument(retry.document);
-      newSha = await writeRemote(meta, buildDocument(meta.includePhotos ?? false), retry.sha);
+    const status = (error as { status?: number }).status;
+    if (status === 409 || status === 422) {
+      const retry = await readRemote(meta);
+      if (retry.document && !remoteIsStale(syncMeta(), retry.document)) {
+        if (!adoptNewerGeneration(retry.document)) mergeDocument(retry.document);
+      }
+      newRevision = await writeRemote(meta, buildDocument(meta.includePhotos ?? false), retry.revision);
     } else {
       throw error;
     }
   }
 
   saveSyncMeta({
-    remoteSha: newSha,
+    remoteSha: newRevision,
     lastSyncedAt: new Date(),
     lastPushedAt: new Date(),
     demoData: false,
-    lastStatus: replacing
-      ? 'Sample data replaced with the records from GitHub.'
-      : `Synced — ${report.added} added, ${report.updated} updated, ${report.removed} removed.`,
+    lastStatus: superseded
+      ? 'Took the records from the shared copy after it was reset.'
+      : replacing
+        ? `Sample data replaced with the records from ${targetName(meta)}.`
+        : `Synced — ${report.added} added, ${report.updated} updated, ${report.removed} removed.`,
   });
   await flush();
   return { ...report, pushed: true, signOutRequired: replacing };
 }
 
-/** Checks the repository is reachable and writable before saving the settings. */
+/** Checks the shared location is reachable and writable before settings are saved. */
 export async function testConnection(settings: SyncSettings): Promise<{ ok: true; exists: boolean }> {
-  const probe: StoredMeta = { ...syncMeta(), ...settings };
+  const candidate: StoredMeta = { ...syncMeta(), ...settings };
+
+  if ((settings.provider ?? 'github') === 'supabase') {
+    return { ok: true, ...(await probeSupabase(supabaseConfig(candidate))) };
+  }
+
   const response = await request(
-    probe,
+    candidate,
     `${API}/repos/${encodeURIComponent(settings.owner)}/${encodeURIComponent(settings.repo)}`,
   );
   if (!response.ok) throw describeFailure(response.status, await response.text());
@@ -585,8 +735,69 @@ export async function testConnection(settings: SyncSettings): Promise<{ ok: true
     throw new SyncError(403, 'This token can read the repository but not write to it.');
   }
 
-  const remote = await fetchRemote(probe);
+  const remote = await readRemote(candidate);
   return { ok: true, exists: Boolean(remote.document) };
+}
+
+// ------------------------------------------------------------------ reset
+
+export interface ResetReport {
+  cleared: number;
+  scope: 'device' | 'everywhere';
+  pushed: boolean;
+}
+
+/**
+ * Clears the records so real entries can start on an empty database.
+ *
+ * Accounts, company details, the sync connection and saved backups are kept —
+ * this erases the work, not the setup. "everywhere" additionally raises the
+ * generation and writes it out, which tells every other device to drop its copy
+ * on the next sync instead of merging the old records straight back in.
+ */
+export async function resetData(scope: 'device' | 'everywhere'): Promise<ResetReport> {
+  const data = db();
+  const cleared = SYNCED_TABLES.filter((table) => table !== 'users' && table !== 'settings').reduce(
+    (total, table) => total + (data[table] as unknown[]).length,
+    0,
+  );
+
+  for (const table of SYNCED_TABLES) {
+    if (table === 'users' || table === 'settings') continue;
+    (data as unknown as Record<string, unknown[]>)[table] = [];
+  }
+  data.activityLogs = [];
+  // The generation supersedes every earlier deletion, so the tombstones that
+  // recorded them are no longer needed.
+  data.tombstones = [];
+  save(...SYNCED_TABLES, 'activityLogs', 'tombstones');
+
+  const meta = syncMeta();
+  saveSyncMeta({
+    demoData: false,
+    // An empty database from here on is deliberate, not a fresh install.
+    initialised: true,
+    ...(scope === 'everywhere' ? { generation: (meta.generation ?? 1) + 1 } : {}),
+    lastStatus:
+      scope === 'everywhere'
+        ? 'Records erased on this device. Sync to clear the other computers.'
+        : 'Records erased on this device.',
+  });
+  await flush();
+
+  let pushed = false;
+  if (scope === 'everywhere' && isConfigured(syncMeta())) {
+    try {
+      await push();
+      pushed = true;
+    } catch {
+      // The erase itself succeeded; the next sync carries it across.
+      saveSyncMeta({ lastStatus: 'Records erased here. The next sync will clear the other computers.' });
+      await flush();
+    }
+  }
+
+  return { cleared, scope, pushed };
 }
 
 export type { StoredMeta as SyncMetaState };

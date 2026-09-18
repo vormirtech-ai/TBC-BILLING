@@ -92,23 +92,21 @@ export function Topbar(): JSX.Element {
             label={
               syncStatus?.configured ? (
                 <span className="block max-w-56 space-y-0.5">
-                  <span className="block font-semibold">
-                    {syncStatus.owner}/{syncStatus.repo}
-                  </span>
+                  <span className="block font-semibold">{syncStatus.target}</span>
                   <span className="block">{syncStatus.lastStatus}</span>
                   <span className="block text-muted-foreground">
                     {syncStatus.lastSyncedAt ? `Last synced ${fromNow(syncStatus.lastSyncedAt)}` : 'Not synced yet'}
                   </span>
                 </span>
               ) : (
-                'Connect a GitHub repository in Settings → Sync to share data with the site team.'
+                'Connect Supabase or GitHub in Settings → Sync to share data with the site team.'
               )
             }
           >
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Sync with GitHub"
+              aria-label="Sync shared data"
               disabled={!syncStatus?.configured || syncing}
               onClick={() => void runSync('now')}
             >

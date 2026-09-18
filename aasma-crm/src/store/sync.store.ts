@@ -5,15 +5,24 @@ import { useAuth } from './auth.store';
 
 export interface SyncStatus {
   configured: boolean;
+  /** Where the shared document lives. */
+  provider: 'github' | 'supabase';
   deviceId: string;
   deviceName: string;
   owner: string;
   repo: string;
   branch: string;
   path: string;
+  supabaseUrl: string;
+  supabaseTable: string;
+  documentId: string;
   autoSync: boolean;
   includePhotos: boolean;
   hasToken: boolean;
+  hasKey: boolean;
+  generation: number;
+  /** Human-readable location, for the status line and the header tooltip. */
+  target: string;
   lastSyncedAt: string | null;
   lastPushedAt: string | null;
   lastStatus: string;

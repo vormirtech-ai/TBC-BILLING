@@ -357,32 +357,83 @@ export const settingsSchema = z.object({
  * read and write on one repository — it is stored on the device that entered it
  * and is sent only to api.github.com.
  */
-export const syncSettingsSchema = z.object({
-  deviceName: z
-    .string()
-    .trim()
-    .max(60)
-    .optional()
-    .nullable()
-    .transform((value) => value ?? ''),
-  owner: requiredText('GitHub user or organisation', 100).regex(
-    /^[A-Za-z0-9-_.]+$/,
-    'Use the account name exactly as it appears in the repository address',
-  ),
-  repo: requiredText('Repository', 120).regex(/^[A-Za-z0-9-_.]+$/, 'Use the repository name only, without the owner'),
-  branch: z.string().trim().min(1).max(100).default('main'),
-  path: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
-    .regex(/^[A-Za-z0-9-_./]+\.json$/, 'Use a path ending in .json, for example data/crm-data.json')
-    .default('crm-data.json'),
-  /** Blank means "keep the token already saved on this device". */
-  token: z.string().trim().max(400).optional().default(''),
-  autoSync: z.coerce.boolean().default(false),
-  includePhotos: z.coerce.boolean().default(false),
-});
+export const syncSettingsSchema = z
+  .object({
+    deviceName: z
+      .string()
+      .trim()
+      .max(60)
+      .optional()
+      .nullable()
+      .transform((value) => value ?? ''),
+    /** Where the shared copy lives. */
+    provider: z.enum(['github', 'supabase']).default('github'),
+
+    // --- GitHub: one JSON file in a repository
+    owner: z.string().trim().max(100).optional().default(''),
+    repo: z.string().trim().max(120).optional().default(''),
+    branch: z.string().trim().max(100).default('main'),
+    path: z.string().trim().max(200).default('crm-data.json'),
+
+    // --- Supabase: one row in a table
+    supabaseUrl: z.string().trim().max(300).optional().default(''),
+    supabaseTable: z.string().trim().max(120).default('crm_documents'),
+    documentId: z.string().trim().min(1).max(120).default('aasma-crm'),
+
+    /** Blank means "keep the credential already saved on this device". */
+    token: z.string().trim().max(600).optional().default(''),
+    supabaseKey: z.string().trim().max(600).optional().default(''),
+
+    autoSync: z.coerce.boolean().default(false),
+    includePhotos: z.coerce.boolean().default(false),
+  })
+  .superRefine((value, context) => {
+    if (value.provider === 'github') {
+      if (!value.owner) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['owner'], message: 'GitHub user or organisation is required' });
+      } else if (!/^[A-Za-z0-9-_.]+$/.test(value.owner)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['owner'],
+          message: 'Use the account name exactly as it appears in the repository address',
+        });
+      }
+      if (!value.repo) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['repo'], message: 'Repository is required' });
+      } else if (!/^[A-Za-z0-9-_.]+$/.test(value.repo)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['repo'],
+          message: 'Use the repository name only, without the owner',
+        });
+      }
+      if (!/^[A-Za-z0-9-_./]+\.json$/.test(value.path)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['path'],
+          message: 'Use a path ending in .json, for example data/crm-data.json',
+        });
+      }
+      return;
+    }
+
+    if (!value.supabaseUrl) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['supabaseUrl'], message: 'Project URL is required' });
+    } else if (!/^https:\/\/[A-Za-z0-9-]+\.supabase\.(co|in|net)\/?$/.test(value.supabaseUrl)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['supabaseUrl'],
+        message: 'Use the project URL, for example https://abcdefgh.supabase.co',
+      });
+    }
+    if (!/^[A-Za-z0-9_]+$/.test(value.supabaseTable)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['supabaseTable'],
+        message: 'Use a plain table name, for example crm_documents',
+      });
+    }
+  });
 
 export type SyncSettingsInput = z.input<typeof syncSettingsSchema>;
 
