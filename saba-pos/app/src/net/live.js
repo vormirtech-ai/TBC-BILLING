@@ -32,6 +32,15 @@ export function connect({ revision, status }) {
   onRevision = revision || onRevision;
   onStatus = status || onStatus;
   stopped = false;
+
+  // The published demonstration is one terminal talking to itself, so there
+  // is no stream to open and nothing to be out of date with. Say the link is
+  // up — because it is, in the only sense that matters here — and stop.
+  if (globalThis.SABA_TILL) {
+    onStatus({ connected: true, since: Date.now(), terminals: 1 });
+    return;
+  }
+
   open();
 }
 

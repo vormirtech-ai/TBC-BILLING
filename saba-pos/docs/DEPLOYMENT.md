@@ -31,6 +31,14 @@ the floor but is cramped for taking an order.
 
 ## 2. Installing
 
+> **The website is not an install.** There is a demonstration published on
+> GitHub Pages, and it is genuinely the whole application — but it runs
+> against a till inside the visitor's browser and forgets everything when
+> the tab closes. A restaurant's till is a server with a database on the
+> restaurant's own computer. GitHub Pages serves static files; it cannot be
+> one, and a restaurant's bills do not belong on the public internet
+> regardless. Install it here, on their hardware.
+
 ### On a Linux till (the normal way)
 
 ```sh
@@ -49,7 +57,11 @@ PIN is printed once, at first start:
 journalctl -u saba | grep PIN
 ```
 
-### In Docker
+### In Docker (only if you already run Docker)
+
+Docker buys nothing here — there are no dependencies to isolate — so it is
+offered for shops that deploy everything that way, not recommended over the
+installer above.
 
 ```sh
 docker compose up -d
@@ -269,7 +281,28 @@ curl http://localhost:8080/api/health
 
 ---
 
-## 10. Handing over
+## 10. The published demonstration
+
+`node tools/build-site.mjs` builds a static site: a page about Saba and the
+application itself, served against an in-browser till. The GitHub Actions
+workflow at `.github/workflows/deploy.yml` publishes it to GitHub Pages on
+every push.
+
+It is a sales tool and a way to let somebody try the thing before they buy
+it. Two properties are worth knowing:
+
+- **It is the real application.** The demonstration's only extra file is
+  `app/src/demo.js`, which stands the in-tab till up and then boots the
+  ordinary entry point. Everything else is the file a restaurant's till
+  serves. `tests/till/parity.test.mjs` runs a whole service through both and
+  fails if one figure differs.
+- **It holds nothing.** No server, no database, no account that means
+  anything. The PINs are printed on the page on purpose.
+
+To publish it under a different name or path, change the workflow; to stop
+publishing it, delete the workflow. Neither affects an installed till.
+
+## 11. Handing over
 
 Leave the restaurant with:
 

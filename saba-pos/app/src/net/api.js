@@ -18,6 +18,18 @@
 
 const HEADERS = { 'content-type': 'application/json' };
 
+/**
+ * How a request leaves this terminal.
+ *
+ * Normally `fetch`, to the till on the restaurant's own network. The
+ * published demonstration has no till to reach, so its bootstrap installs a
+ * stand-in that answers the same paths in the browser. Everything above this
+ * line — every view, the shell, the printed bill — is the same code either
+ * way, and that is the entire reason the seam is here and not higher up.
+ */
+const transport = (path, init) =>
+  (globalThis.SABA_TILL ? globalThis.SABA_TILL(path, init) : fetch(path, init));
+
 /** Listeners for the states the shell shows: offline, queued, signed out. */
 const listeners = new Set();
 export const onNetworkChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
@@ -71,7 +83,7 @@ async function request(method, path, body, { retryOnOffline = false } = {}) {
 
   let response;
   try {
-    response = await fetch(path, {
+    response = await transport(path, {
       method,
       headers: body === undefined ? undefined : HEADERS,
       body: body === undefined ? undefined : JSON.stringify(body),

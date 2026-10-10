@@ -1,224 +1,35 @@
 /**
- * Reports, assembled on the server.
+ * The takings, over SQLite.
  *
- * The aggregation itself is the same `shared/reports.js` the browser uses, so
- * a figure on the manager's screen and a figure in the exported CSV are
- * produced by one piece of code. What this module adds is the part only the
- * server can do: reaching back through months of settled bills, and the
- * day-end close that reconciles the cash drawer against them.
+ * The assembly itself lives in `app/src/shared/takings.js` so that the
+ * published demonstration and anything else embedding Saba produce the very
+ * same report. This file is only the part that knows where the orders are
+ * kept.
  */
 
 import { all, one } from './db/index.js';
 import * as store from './store.js';
 
-import { costOrder, charges } from '../app/src/shared/pricing.js';
-import { stationPerformance, exceptions } from '../app/src/shared/reports.js';
-import { itemById } from '../app/src/shared/catalogue.js';
-import { PAYMENT_METHODS, paymentById } from '../app/src/shared/config.js';
-import { dayRange } from '../app/src/shared/format.js';
+import {
+  buildDayReport as assembleDay,
+  buildRangeReport as assembleRange,
+  dayRecord as assembleDayRecord,
+} from '../app/src/shared/takings.js';
 
-const sum = (list, fn) => list.reduce((n, x) => n + (fn ? fn(x) : x), 0);
-const safeDiv = (a, b) => (b ? a / b : 0);
+/** Where this process reads its history from. */
+const source = {
+  settledOn: (day) => store.settledOn(day),
+  ordersBetween: (from, to) => store.ordersBetween(from, to),
+  openOrders: () => store.openOrders(),
+  shiftFor: (day) =>
+    one('SELECT * FROM shifts WHERE day = ? ORDER BY opened_at DESC LIMIT 1', day) || null,
+};
 
-/**
- * Turn stored orders into the flat "check" shape every chart reads.
- *
- * It is the same shape the browser builds for today's live trading, which is
- * why one set of chart functions can draw both.
- */
-function toChecks(orders) {
-  return orders.map((order) => {
-    const t = costOrder(order);
-    return {
-      at: order.closedAt || order.openedAt,
-      covers: order.covers,
-      lines: order.lines
-        .filter((l) => l.status !== 'VOID')
-        .map((l) => ({
-          itemId: l.itemId,
-          name: l.name,
-          category: itemById(l.itemId)?.category || 'mains',
-          qty: l.qty,
-          unitPaise: l.unitPaise,
-        })),
-      gross: t.gross,
-      discount: t.discount,
-      serviceCharge: t.serviceCharge,
-      taxTotal: t.taxTotal,
-      taxes: t.taxes,
-      tip: t.tip,
-      total: t.total,
-      net: t.discounted,
-      method: order.payments[0]?.method || 'CASH',
-      payments: order.payments,
-      durationMin: Math.round(((order.closedAt || Date.now()) - order.openedAt) / 60000),
-      voided: false,
-      order,
-    };
-  });
-}
-
-/** One business day, in the shape the chart functions expect. */
-export function dayRecord(day) {
-  const orders = store.settledOn(day);
-  const checks = toChecks(orders);
-  return {
-    day,
-    at: new Date(`${day}T12:00:00`).getTime(),
-    weekday: new Date(`${day}T12:00:00`).getDay(),
-    checks,
-    covers: sum(checks, (c) => c.covers),
-    net: sum(checks, (c) => c.net),
-    total: sum(checks, (c) => c.total),
-  };
-}
-
-/* --------------------------------------------------------------- range --- */
-
-export function buildRangeReport(from, to) {
-  // Pull the whole window in one query rather than a query per day: a
-  // thirty-day report would otherwise be thirty round trips to SQLite.
-  const orders = store.ordersBetween(from, to);
-  const byDay = new Map(dayRange(from, to).map((day) => [day, []]));
-  for (const order of orders) {
-    if (!byDay.has(order.businessDay)) byDay.set(order.businessDay, []);
-    byDay.get(order.businessDay).push(order);
-  }
-
-  const days = [...byDay.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([day, list]) => {
-      const checks = toChecks(list);
-      return {
-        day,
-        at: new Date(`${day}T12:00:00`).getTime(),
-        weekday: new Date(`${day}T12:00:00`).getDay(),
-        checks,
-        covers: sum(checks, (c) => c.covers),
-        net: sum(checks, (c) => c.net),
-        total: sum(checks, (c) => c.total),
-      };
-    });
-
-  return { from, to, days, generatedAt: Date.now() };
-}
-
-/* ----------------------------------------------------------- day close --- */
-
-/**
- * The Z report: what the till says happened, and what is actually in it.
- *
- * This is the number a restaurant closes on. It separates takings by tender,
- * because only cash should be in the drawer — everything else settled to a
- * bank — and then states the variance plainly rather than burying it.
- */
-export function buildDayReport(day) {
-  const orders = store.settledOn(day);
-  const checks = toChecks(orders);
-  const openNow = store.openOrders().filter((o) => o.businessDay === day);
-
-  const byMethod = new Map(PAYMENT_METHODS.map((m) => [m.id, {
-    method: m.id, label: m.label, countsToDrawer: m.countsToDrawer, paise: 0, count: 0,
-  }]));
-  for (const order of orders) {
-    for (const payment of order.payments) {
-      const row = byMethod.get(payment.method)
-        || { method: payment.method, label: payment.method, countsToDrawer: false, paise: 0, count: 0 };
-      row.paise += payment.paise;
-      row.count += 1;
-      byMethod.set(payment.method, row);
-    }
-  }
-  const tenders = [...byMethod.values()].filter((t) => t.count > 0);
-
-  const taxTotals = charges().taxComponents.map((component) => ({
-    id: component.id,
-    label: component.label,
-    bps: component.bps,
-    paise: sum(checks, (c) => c.taxes.find((t) => t.id === component.id)?.paise || 0),
-  }));
-
-  const shift = one(
-    'SELECT * FROM shifts WHERE day = ? ORDER BY opened_at DESC LIMIT 1', day
-  ) || null;
-
-  const cashTaken = sum(tenders.filter((t) => t.countsToDrawer), (t) => t.paise);
-  const expectedDrawer = (shift?.float_paise || 0) + cashTaken;
-  const counted = shift?.counted_paise ?? null;
-
-  const totals = {
-    bills: checks.length,
-    covers: sum(checks, (c) => c.covers),
-    gross: sum(checks, (c) => c.gross),
-    comps: sum(checks, (c) => c.order && costOrder(c.order).comps),
-    discount: sum(checks, (c) => c.discount),
-    net: sum(checks, (c) => c.net),
-    serviceCharge: sum(checks, (c) => c.serviceCharge),
-    taxTotal: sum(checks, (c) => c.taxTotal),
-    tips: sum(checks, (c) => c.tip),
-    roundOff: sum(checks, (c) => costOrder(c.order).roundOff),
-    total: sum(checks, (c) => c.total),
-  };
-  totals.avgCheck = Math.round(safeDiv(totals.total, totals.bills));
-  totals.perCover = Math.round(safeDiv(totals.total, totals.covers));
-  totals.avgTurnMin = Math.round(safeDiv(sum(checks, (c) => c.durationMin), checks.length));
-
-  return {
-    day,
-    generatedAt: Date.now(),
-    totals,
-    taxes: taxTotals,
-    tenders,
-    cash: {
-      floatPaise: shift?.float_paise ?? 0,
-      takenPaise: cashTaken,
-      expectedPaise: expectedDrawer,
-      countedPaise: counted,
-      variancePaise: counted === null ? null : counted - expectedDrawer,
-    },
-    shift: shift && {
-      id: shift.id,
-      openedAt: shift.opened_at,
-      openedBy: shift.opened_by,
-      closedAt: shift.closed_at,
-      closedBy: shift.closed_by,
-      note: safeParse(shift.doc)?.note || '',
-    },
-    stations: stationPerformance([...orders, ...openNow]),
-    exceptions: exceptions([...orders, ...openNow]),
-    /** Tables still open when the report was run — a day cannot close on these. */
-    stillOpen: openNow.map((o) => ({
-      id: o.id,
-      table: o.tableLabel,
-      covers: o.covers,
-      openedAt: o.openedAt,
-      total: costOrder(o).total,
-    })),
-    staff: staffFor(orders),
-  };
-}
-
-function staffFor(orders) {
-  const rows = new Map();
-  for (const order of orders) {
-    const row = rows.get(order.captainId)
-      || { id: order.captainId, name: order.captainName, bills: 0, covers: 0, total: 0 };
-    row.bills += 1;
-    row.covers += order.covers;
-    row.total += costOrder(order).total;
-    rows.set(order.captainId, row);
-  }
-  return [...rows.values()]
-    .map((r) => ({ ...r, avgCheck: Math.round(safeDiv(r.total, r.bills)) }))
-    .sort((a, b) => b.total - a.total);
-}
-
-function safeParse(json) {
-  try { return JSON.parse(json); } catch { return null; }
-}
+export const dayRecord = (day) => assembleDayRecord(day, source);
+export const buildRangeReport = (from, to) => assembleRange(from, to, source);
+export const buildDayReport = (day) => assembleDay(day, source);
 
 /** Which days have any trading at all — used to drive a date picker. */
 export const tradingDays = () =>
   all("SELECT business_day AS day, count(*) AS bills FROM orders"
-    + " WHERE status = 'SETTLED' GROUP BY business_day ORDER BY business_day DESC")
-    .map((r) => r);
+    + " WHERE status = 'SETTLED' GROUP BY business_day ORDER BY business_day DESC");

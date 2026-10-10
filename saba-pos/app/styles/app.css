@@ -1845,6 +1845,65 @@ a { color: var(--navy); }
   padding: 3px;
 }
 
+/* ---------------------------------------------------- the demo banner --- */
+
+/*
+ * Only the published demonstration carries this. It has to be impossible to
+ * miss — somebody landing on the link should never wonder whether they are
+ * looking at a real restaurant's till — without stealing the top of the
+ * screen from the thing it is pointing at.
+ */
+.demobar {
+  position: fixed; inset: 0 0 auto 0; z-index: 60;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 7px 16px;
+  background: var(--navy-deep); color: #e9eef5;
+  font-size: 12.5px; line-height: 1.5;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+.demobar strong { color: var(--gold-light); letter-spacing: .02em; }
+.demobar b { color: #fff; font-weight: 600; white-space: nowrap; }
+.demobar__text { color: rgba(233, 238, 245, .78); }
+
+.demobar__dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--gold-light);
+  box-shadow: 0 0 0 0 rgba(196, 154, 74, .6);
+  animation: demopulse 2.4s ease-out infinite;
+}
+
+@keyframes demopulse {
+  70% { box-shadow: 0 0 0 7px rgba(196, 154, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(196, 154, 74, 0); }
+}
+
+.demobar__reset,
+.demobar__back {
+  margin-left: auto;
+  padding: 4px 11px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  color: #e9eef5; border: 1px solid rgba(233, 238, 245, .28);
+  background: transparent; text-decoration: none;
+  transition: background .14s, border-color .14s;
+}
+.demobar__back { margin-left: 0; }
+.demobar__reset:hover,
+.demobar__back:hover { background: rgba(233, 238, 245, .12); border-color: var(--gold-light); }
+
+/* Push everything down rather than overlapping it. */
+.has-demobar .app,
+.has-demobar .lock { padding-top: 34px; }
+.has-demobar .rail { top: 34px; }
+
+@media (max-width: 720px) {
+  .demobar__text { display: none; }
+  .has-demobar .app, .has-demobar .lock { padding-top: 30px; }
+}
+
+/* It is a screen artefact; a printed bill must never carry it. */
+@media print { .demobar { display: none !important; } }
+
 /* ------------------------------------------------------------- mounting --- */
 
 /* Views render into this before being swapped in, so a half-drawn screen

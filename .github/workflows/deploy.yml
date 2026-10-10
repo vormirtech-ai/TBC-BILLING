@@ -1,8 +1,28 @@
+# ---------------------------------------------------------------------------
+# GitHub Pages
+# ---------------------------------------------------------------------------
+# A repository gets one Pages site, so this workflow assembles the whole of
+# it in one place:
+#
+#   /        The Baruch Cafe counter, served from the repository root as before.
+#   /saba/   Saba Fine Dine — a page about the product, and a demonstration of
+#            it that runs entirely in the visitor's browser.
+#
+# What is published is a demonstration, not a till. Saba itself is a small
+# server with a database on the restaurant's own computer; it is installed
+# with `saba-pos/install.sh` and needs nothing from this website. See
+# saba-pos/docs/DEPLOYMENT.md.
+# ---------------------------------------------------------------------------
+
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # So the Saba demonstration can be seen before it is merged. Drop this
+      # line once the branch has landed.
+      - claude/offline-billing-restaurant-demo-mwbkhu
   workflow_dispatch:
 
 permissions:
@@ -20,19 +40,46 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
 
-      # There is no build step: the app is plain HTML, CSS and ES modules, so
-      # the repository root is the site.
+      # The demonstration runs the product's own code. If that code is broken
+      # the demonstration must not ship, so the suite gates the deploy.
+      - name: Test Saba
+        working-directory: saba-pos
+        run: node tests/all.mjs
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          # The existing counter app: the repository root, minus everything
+          # that is source rather than site. tar rather than rsync, so the
+          # same two lines also run on a developer's machine.
+          tar -cf - \
+            --exclude=./.git \
+            --exclude=./.github \
+            --exclude=./_site \
+            --exclude=./data \
+            --exclude=./node_modules \
+            --exclude=./saba-pos \
+            --exclude=./saba-demo \
+            --exclude='*.zip' \
+            . | tar -xf - -C _site
+          # Saba: the page and the in-browser demonstration.
+          node saba-pos/tools/build-site.mjs "$PWD/_site/saba"
+          touch _site/.nojekyll
+
       - name: Upload the site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: _site
 
       - name: Deploy
         id: deployment

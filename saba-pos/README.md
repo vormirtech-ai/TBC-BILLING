@@ -37,28 +37,48 @@ third year of using it.
 Every screen is one of four roles' business — manager, captain, cashier,
 kitchen — and the server enforces that, not the interface.
 
-## Getting it running
+## Try it without installing anything
 
-**On a restaurant's till** (Linux, systemd, Node 22.5+):
+There is a demonstration on the web: the whole application, running against a
+till that lives in your browser tab.
+
+> **[Open the demonstration →](https://vormirtech-ai.github.io/TBC-BILLING/saba/)**
+> Sign in as Manager with PIN 1379.
+
+It is built from this directory by `tools/build-site.mjs` and published by
+GitHub Pages. Every screen, every figure and every refusal is the product's
+own code — `tests/till/parity.test.mjs` runs a service through both the real
+server and the browser till and fails if a single paisa differs.
+
+What it is **not** is a place to run a restaurant. A till is a server with a
+database on the restaurant's own computer; a web page cannot be one, and the
+restaurant's bills should not be on the public internet in the first place.
+The demonstration keeps everything in the tab and forgets it when the tab
+closes.
+
+## Getting it running for real
+
+**On a restaurant's till** (Linux, systemd, Node 22.5+) — the normal way:
 
 ```sh
 sudo ./install.sh
 ```
 
-**In Docker:**
-
-```sh
-docker compose up -d
-```
-
-**To look at it right now**, with a month of trading and a room mid-service
+**To look at it on a laptop**, with a month of trading and a room mid-service
 already in it:
 
 ```sh
 npm run demo        # then open http://localhost:8080, PIN 1379
 ```
 
-All three print the address to open on the tablets, and the manager PIN, once.
+**Anywhere else**, including in Docker if you prefer it:
+
+```sh
+node server/main.js        # or: docker compose up -d
+```
+
+Each prints the address to open on the tablets, and the manager PIN, once.
+None of them needs Docker, and none of them needs the website.
 
 Full instructions, including the network and the printers:
 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
@@ -82,10 +102,17 @@ otherwise have to find out the hard way:
 npm test
 ```
 
-Seventy-eight cases: the pricing and order maths as pure functions, and the
-rest against a real server on a real SQLite database over real HTTP. Nothing
-is mocked. A point of sale is a thing that takes money; a suite that stubs
-out the database proves only that the stubs work.
+Eighty-three cases: the pricing and order maths as pure functions, the API
+against a real server on a real SQLite database over real HTTP, and the
+published demonstration held against the product it demonstrates. Nothing is
+mocked. A point of sale is a thing that takes money; a suite that stubs out
+the database proves only that the stubs work.
+
+```sh
+npm test unit     # the domain, instantly
+npm test api      # a real server per case
+npm test till     # the demonstration, against the real thing
+```
 
 ## Requirements
 

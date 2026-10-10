@@ -119,6 +119,42 @@ table on settle and report from it; nothing else has to change.
 
 ---
 
+## The published demonstration
+
+`app/src/net/till/` is a till that runs in the browser, so the whole
+application can be published as a static site with nothing behind it. It is
+the thing a client clicks before they buy.
+
+It is **not** a second implementation. Every state transition and every
+figure comes from `app/src/shared/` — the same `costOrder`, the same
+`fireCourse`, the same `buildWorkedExample`, the same `buildDayReport`. What
+`till/` adds is only what the server does with SQLite: holding the documents,
+handing out numbers, keeping the audit log. The seam it plugs into is one
+line in `net/api.js`:
+
+```js
+const transport = (path, init) =>
+  (globalThis.SABA_TILL ? globalThis.SABA_TILL(path, init) : fetch(path, init));
+```
+
+Two rules keep it honest, and both matter more than they look:
+
+1. **Anything the demonstration needs that is domain logic goes in
+   `shared/`, never in `till/`.** That is why `takings.js` takes a `source`
+   rather than reaching for a database, and why `worked-example.js` is a pure
+   generator. When you find yourself about to write business logic in
+   `till/`, you have found the next thing to move into `shared/`.
+2. **`tests/till/parity.test.mjs` must keep failing when they drift.** It
+   runs a service — modifiers, a comp, an approved discount, a part payment,
+   with and without the service charge — through the real server and through
+   the till, and compares every line of the bill. If you weaken it, you have
+   removed the only thing stopping the demonstration from quietly lying.
+
+The demonstration's PINs are in the clear and its sign-in compares them
+directly. That is deliberate and stated on the page. Do not be tempted to
+make it look more secure than it is; it holds nothing worth securing, and
+pretending otherwise would be the dishonest part.
+
 ## Things a restaurant configures (do not hard-code them again)
 
 Four things used to be constants and are now stored in `settings`, loaded at

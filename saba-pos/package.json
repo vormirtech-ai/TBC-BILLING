@@ -12,6 +12,7 @@
     "demo": "SABA_SEED_DEMO=1 SABA_SETUP_PIN=1379 node server/main.js",
     "test": "node tests/all.mjs",
     "assets": "python3 tools/make-assets.py brand/saba-logo-master.png",
+    "site": "node tools/build-site.mjs",
     "backup": "node tools/backup.mjs",
     "restore": "node tools/restore.mjs"
   },
