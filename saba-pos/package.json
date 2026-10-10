@@ -1,0 +1,20 @@
+{
+  "name": "saba-pos",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Saba — offline billing and kitchen order management for fine dining.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "start": "node server/main.js",
+    "dev": "SABA_LOG_LEVEL=debug SABA_SEED_DEMO=1 node --watch server/main.js",
+    "demo": "SABA_SEED_DEMO=1 SABA_SETUP_PIN=1379 node server/main.js",
+    "test": "node tests/all.mjs",
+    "assets": "python3 tools/make-assets.py brand/saba-logo-master.png",
+    "backup": "node tools/backup.mjs",
+    "restore": "node tools/restore.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

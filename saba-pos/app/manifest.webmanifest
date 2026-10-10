@@ -1,0 +1,15 @@
+{
+  "name": "Saba — Billing & KOT",
+  "short_name": "Saba",
+  "description": "Billing and kitchen order management for fine dining.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F7F4EE",
+  "theme_color": "#0C2340",
+  "icons": [
+    { "src": "assets/saba-icon.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "assets/saba-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

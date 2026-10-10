@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#0C2340" />
+    <meta name="description" content="Saba — billing and kitchen order management for fine dining." />
+    <title>Saba · Fine Dining Billing &amp; KOT</title>
+
+    <link rel="icon" href="assets/saba-icon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="assets/saba-logo.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+
+    <!--
+      No web fonts, no CDN, no analytics, no outbound requests of any kind.
+      This terminal is expected to work with the internet unplugged, so it
+      asks the outside world for nothing at all. The serif and sans stacks in
+      app.css resolve to good system faces on Windows, macOS, iPadOS, Android
+      and Linux.
+    -->
+    <link rel="stylesheet" href="styles/app.css" />
+    <link rel="stylesheet" href="styles/print.css" />
+  </head>
+
+  <body>
+    <!-- Shown until the terminal boots, and reused for fatal start-up errors. -->
+    <div id="boot" class="boot">
+      <div class="boot__inner">
+        <img class="boot__logo" src="assets/saba-logo.png" alt="Saba Fine Dine" />
+        <p class="boot__text">Opening the terminal…</p>
+      </div>
+    </div>
+
+    <!-- Bills and kitchen dockets are built here; only the printer sees them. -->
+    <div id="printArea" class="printarea" aria-hidden="true"></div>
+
+    <noscript>
+      <div class="boot__inner">
+        <p class="boot__text">This terminal needs JavaScript switched on to run.</p>
+      </div>
+    </noscript>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

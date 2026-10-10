@@ -1,0 +1,136 @@
+SABA RESTAURANT SUITE
+Commercial software licence
+
+
+1.  THIS AGREEMENT
+
+    This licence is between the supplier of the Saba Restaurant Suite
+    ("the Supplier") and the business that has paid for it ("the Licensee").
+    Installing or using the software means accepting it.
+
+
+2.  WHAT THE LICENSEE MAY DO
+
+    a)  Install and run one copy of the software at one restaurant premises,
+        for that restaurant's own trading, for as long as the Licensee wishes.
+
+    b)  Connect as many terminals — tills, tablets, kitchen screens, office
+        computers — to that one installation as the premises needs. There is
+        no per-seat or per-terminal charge.
+
+    c)  Take, keep and restore copies of the software and of its database for
+        the purposes of backup and disaster recovery.
+
+    d)  Install the software on a second machine kept as a cold standby for
+        the first, provided only one of them is in use at a time.
+
+
+3.  WHAT THE LICENSEE MAY NOT DO
+
+    a)  Use the software at a second premises, or by a second business,
+        without a further licence.
+
+    b)  Sell, sub-licence, rent, lend or redistribute the software, in whole
+        or in part, to anybody else.
+
+    c)  Remove or alter the Supplier's copyright notices, except for the
+        restaurant branding the software is designed to be configured with.
+
+
+4.  THE RESTAURANT'S OWN DATA
+
+    Everything the software records — the menu, the staff, the reservations,
+    the orders, the bills and the reports — belongs to the Licensee and to
+    nobody else. It is held in one SQLite database file on the Licensee's own
+    hardware, in a documented and openly readable format.
+
+    The software makes no network requests off the premises of any kind. It
+    transmits nothing to the Supplier. The Licensee may copy, export, inspect
+    or take that database elsewhere at any time, with or without the
+    Supplier's involvement, and the Supplier will not withhold it, encrypt it
+    against the Licensee or make its retrieval conditional on anything.
+
+
+5.  SOURCE CODE
+
+    The software is delivered as readable source. The Licensee may read it,
+    and may modify their own copy to suit their premises. Clause 3(b) still
+    applies to anything so modified.
+
+    Where the Licensee modifies the software, the Supplier's obligations under
+    clause 6 apply to the software as delivered, not as modified.
+
+
+6.  SUPPORT AND UPDATES
+
+    As agreed separately in writing between the parties. Nothing in this
+    licence by itself obliges the Supplier to provide support, updates or
+    new versions.
+
+
+7.  WARRANTY
+
+    The Supplier warrants that the software performs substantially as its
+    documentation describes. If it does not, and the Licensee says so in
+    writing within ninety days of delivery, the Supplier will either correct
+    it or refund the licence fee, at the Supplier's choice. That is the whole
+    of the Supplier's liability for the software not working.
+
+    Beyond that warranty, the software is provided as it is, without any
+    other warranty, express or implied.
+
+
+8.  LIABILITY
+
+    The Supplier's total liability under or in connection with this licence
+    is limited to the licence fee paid.
+
+    The Supplier is not liable for loss of profit, loss of business, loss of
+    data, or for any indirect or consequential loss.
+
+    Nothing in this clause limits liability for death or personal injury
+    caused by negligence, for fraud, or for anything else that cannot
+    lawfully be limited.
+
+
+9.  THE LICENSEE'S OWN OBLIGATIONS
+
+    The software records what it is told to record. The Licensee remains
+    responsible for:
+
+    a)  the accuracy of its own tax configuration, GST registration details
+        and invoice numbering, and for their compliance with the tax law that
+        applies to the premises;
+
+    b)  the retention of its own records for whatever period that law
+        requires;
+
+    c)  taking its backups off the premises, and testing that they restore;
+
+    d)  the physical and network security of the machines it installs the
+        software on, including not exposing the installation to the public
+        internet.
+
+
+10. ENDING IT
+
+    This licence ends if the Licensee materially breaches it and does not put
+    that right within thirty days of being asked to in writing. On ending,
+    the Licensee stops using the software and deletes its copies — but keeps,
+    in full, its own data as described in clause 4.
+
+
+11. LAW
+
+    This licence is governed by the law of the jurisdiction in which the
+    licensed premises is situated, and the courts of that jurisdiction have
+    exclusive jurisdiction over it.
+
+
+────────────────────────────────────────────────────────────────────────────
+Saba Restaurant Suite, version 2.0.0.
+Copyright © the Supplier. All rights reserved.
+
+This file is the licence for the software. The restaurant name, the mark and
+the artwork in app/assets and brand/ are the property of the restaurant they
+belong to and are not licensed under it.

@@ -1,0 +1,66 @@
+# ---------------------------------------------------------------------------
+# Saba POS — the whole restaurant, one container.
+#
+#   docker compose up -d
+#
+# Then open http://<this machine's address>:8080 on the till, on the tablets
+# and on the kitchen screen. The first-run manager PIN is printed in the log:
+#
+#   docker compose logs saba | grep PIN
+# ---------------------------------------------------------------------------
+
+services:
+  saba:
+    build: .
+    image: saba-pos:2.0.0
+    container_name: saba
+    restart: unless-stopped
+
+    ports:
+      # Bound to every interface so tablets on the restaurant's wifi can reach
+      # it. If the till is also on the internet, put it behind a firewall or a
+      # reverse proxy — see docs/DEPLOYMENT.md.
+      - "8080:8080"
+
+    volumes:
+      # The database and its backups. This is the only thing to back up.
+      - saba-data:/data
+
+    environment:
+      # Set this on a first install to choose the manager PIN yourself.
+      # Leave it unset and one is generated and printed to the log once.
+      SABA_SETUP_PIN: "${SABA_SETUP_PIN:-}"
+
+      # 1 fills a brand-new database with a worked example service, for a
+      # demonstration. A real restaurant's first day leaves this at 0.
+      SABA_SEED_DEMO: "${SABA_SEED_DEMO:-0}"
+
+      SABA_LOG_LEVEL: "${SABA_LOG_LEVEL:-info}"
+      SABA_SESSION_HOURS: "${SABA_SESSION_HOURS:-14}"
+
+      # Switch both of these on only when the app is served over HTTPS
+      # through a reverse proxy you control.
+      SABA_SECURE_COOKIES: "${SABA_SECURE_COOKIES:-0}"
+      SABA_TRUST_PROXY: "${SABA_TRUST_PROXY:-0}"
+
+      TZ: "${TZ:-Asia/Kolkata}"
+
+    # A till is not a general-purpose computer. Nothing here needs to write
+    # outside /data or gain a privilege.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  saba-data:
+    name: saba-data
