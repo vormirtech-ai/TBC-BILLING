@@ -5,42 +5,36 @@
 # it in one place:
 #
 #   /        The Baruch Cafe counter, served from the repository root as before.
-#   /saba/   Saba Fine Dine — a page about the product, and a demonstration of
-#            it that runs entirely in the visitor's browser.
+#   /saba/   Saba Fine Dine — a page about the product, the documentation, and
+#            a demonstration of it that runs entirely in the visitor's browser.
 #
 # What is published is a demonstration, not a till. Saba itself is a small
 # server with a database on the restaurant's own computer; it is installed
 # with `saba-pos/install.sh` and needs nothing from this website. See
 # saba-pos/docs/DEPLOYMENT.md.
+#
+# Two jobs on purpose. The site is built and checked on every branch, so a
+# change that breaks it is caught in the pull request; only the default
+# branch publishes, because that is the one the `github-pages` environment
+# accepts deployments from.
 # ---------------------------------------------------------------------------
 
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-      # So the Saba demonstration can be seen before it is merged. Drop this
-      # line once the branch has landed.
-      - claude/offline-billing-restaurant-demo-mwbkhu
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -50,11 +44,15 @@ jobs:
         with:
           node-version: '22.22.0'
 
-      # The demonstration runs the product's own code. If that code is broken
-      # the demonstration must not ship, so the suite gates the deploy.
+      # The demonstration runs the product's own code, and the suite includes
+      # the parity tests that hold the two to the same figures. If that fails
+      # the demonstration must not ship.
       - name: Test Saba
         working-directory: saba-pos
         run: node tests/all.mjs
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
       - name: Assemble the site
         run: |
@@ -72,15 +70,39 @@ jobs:
             --exclude=./saba-demo \
             --exclude='*.zip' \
             . | tar -xf - -C _site
-          # Saba: the page and the in-browser demonstration.
+          # Saba: the page, the rendered documentation, and the demonstration.
           node saba-pos/tools/build-site.mjs "$PWD/_site/saba"
           touch _site/.nojekyll
+
+      - name: Check the site came out whole
+        run: |
+          for path in index.html saba/index.html saba/demo/index.html \
+                      saba/demo/src/demo.js saba/demo/styles/app.css \
+                      saba/docs/DEPLOYMENT.html; do
+            test -s "_site/$path" || { echo "missing or empty: $path"; exit 1; }
+          done
+          echo "site assembled:"
+          du -sh _site
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
+  # Only the default branch publishes: the `github-pages` environment refuses
+  # deployments from anywhere else, and a job that cannot run should not be
+  # reported as a failure on every feature branch.
+  deploy:
+    needs: build
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
