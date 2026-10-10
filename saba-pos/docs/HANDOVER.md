@@ -243,6 +243,53 @@ to come back around.
 
 ---
 
+## The cloud copy
+
+`server/sync/` mirrors the till into a Supabase project, when one is
+configured. Three files and a table:
+
+- **`tables.js`** — the one place that says what syncs and which way. If the
+  answer to "does this reach the cloud, and can the cloud change it?" is not
+  a line you can read there, something has gone wrong.
+- **`supabase.js`** — PostgREST over `fetch`. A hundred lines rather than a
+  dependency, because the product has none.
+- **`index.js`** — the loop: push, then pull the configuration back.
+
+The design is a **high-water mark per table**, not a change log. Each pass
+sends rows whose `updated_at` is above the mark, then advances it. There is
+nothing to keep in step with the writes, a crash mid-batch resends at worst
+(and an upsert absorbs it), and a till off for a week catches up by the same
+path as one off for a minute.
+
+Four rules worth keeping:
+
+1. **Bills go up only.** `direction: 'push'` for anything that records what
+   happened. Nothing in the cloud may rewrite a settled invoice, and a
+   second writer of a tax record is a problem nobody needs.
+2. **PINs never leave.** `NEVER_SEND` holds `pin_hash` and `pin_salt`. The
+   cloud has no column for them and the pull would not accept one. Making a
+   compromised Supabase project into a way into the till is the one failure
+   here that would actually hurt somebody.
+3. **A sync must never interrupt service.** Every path is wrapped; a failure
+   is recorded and retried. If you add a call site, it does not throw at
+   somebody holding a card machine.
+4. **The key is service-role.** It stays in the till's environment: never in
+   a reply, never in the database, never in the log — `supabase.js` has a
+   `redact` for the last of those.
+
+Totals are the one thing computed on the way out rather than stored: the
+sync runs the shared `costOrder` and sends the result, so the cloud's tax
+column is by definition the figure printed on the guest's bill. Re-deriving
+it in SQL would be a second implementation of the arithmetic an auditor
+checks first.
+
+The sync's own logic is tested everywhere against a PostgREST stand-in
+(`tests/sync/`). The SQL in `supabase/` is tested against a real PostgreSQL
+by `tools/verify-cloud.mjs`, which loads a seeded till into it and checks the
+views add up to the same figures the till's own day report shows. Run that
+when the SQL changes; it is not in `npm test` because the suite must not
+need a database server.
+
 ## Things that will bite you
 
 **`node:sqlite` is experimental.** It prints a warning on every start, and
@@ -278,6 +325,11 @@ pays the cost of a decoy hash so a stopwatch cannot enumerate accounts.
 **Manager approval is still PIN-only** (`POST /api/authorise`), because the
 person approving is not the person signed in. It is bounded by filtering to
 accounts that actually hold the ability, which is normally one or two people.
+
+**Timestamps must be whole numbers.** SQLite will keep a fractional
+millisecond if some arithmetic produces one; Postgres rejects the batch. The
+sync rounds at the boundary, and the worked example that first produced one
+was fixed at its source. If you compute a time, round it.
 
 **The business day rolls at 05:00**, not midnight (`DAY_ROLLOVER_HOUR`). A
 service that runs to two in the morning belongs to the night before. Every

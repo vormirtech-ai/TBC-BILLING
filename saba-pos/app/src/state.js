@@ -282,6 +282,9 @@ export const saveSettings = (body) => api.saveSettings(body).then((r) => {
   return r.settings;
 });
 export const terminals = () => api.terminals().then((r) => r.terminals);
+export const syncStatus = () => api.syncStatus().then((r) => r.sync);
+export const syncNow = () => api.syncNow().then((r) => r.sync);
+export const syncCheck = () => api.syncCheck();
 
 export const openShift = (floatPaise) => api.openShift(floatPaise)
   .then((r) => { replica.seenRevision(r.revision, 'shift'); return r.shift; });

@@ -122,6 +122,19 @@ at 04:30 and the last fourteen are kept.
 onto the owner's laptop or a USB stick. Do it weekly. A backup that lives only on the
 till is not a backup — the fire that takes the till takes it too.
 
+### The cloud copy, if you have one
+
+**Setup → Cloud backup** shows when the till last reached Supabase and how
+much is waiting to go. Green and "just now" means everything is up there.
+
+It syncs by itself every few minutes. **Sync now** forces a pass, and is safe
+to press at any time — it never interrupts service. If it says the cloud
+could not be reached, that is the internet, not the till: the restaurant goes
+on exactly as normal and it catches up on its own.
+
+Bills only ever go up. Nothing done in Supabase can change what a guest was
+charged.
+
 ### Restoring a backup
 
 This replaces everything the restaurant has recorded since that backup was
@@ -198,8 +211,10 @@ journalctl -u saba --since "today" > ~/saba-log.txt
 
 ## What it will never do
 
-- Phone home. It makes no outbound connections of any kind. The restaurant's
-  trading is nobody's business but the restaurant's.
+- Phone home. It makes no outbound connection of any kind unless *you* point
+  it at a Supabase project of your own, and that copy is yours — in your
+  account, under your login. The restaurant's trading is nobody's business
+  but the restaurant's.
 - Stop working because a subscription lapsed, a licence server went down, or
   the internet did. There is no licence check in the software.
 - Hold the data hostage. It is one SQLite file, in an open and documented

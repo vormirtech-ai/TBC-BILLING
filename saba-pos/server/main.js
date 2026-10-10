@@ -16,6 +16,7 @@ import * as auth from './auth.js';
 import * as live from './live.js';
 import { ensureSeeded } from './seed.js';
 import { loadCharges, loadFloorPlan } from './store.js';
+import * as sync from './sync/index.js';
 import {
   HttpError, serveStatic, sendJson, sendText, parseCookies, setCookie,
   clientAddress, requestId, sameOrigin,
@@ -176,6 +177,7 @@ export function start(overrides) {
   ensureSeeded();
   loadCharges();     // the restaurant's own rates, before a single bill is costed
   loadFloorPlan();   // and its own room, before a single table is drawn
+  sync.start();      // the cloud copy, if one is configured
 
   const server = createServer(handle);
 
@@ -229,6 +231,7 @@ export function start(overrides) {
         resolve();
       };
 
+      sync.stop();                      // no new sync passes from here
       live.shutdown();                  // end every event stream politely
       server.close(() => finish(false));
       server.closeIdleConnections();    // and hang up on whoever is just loitering

@@ -18,7 +18,7 @@ import {
 import {
   settings, saveSettings, users, addUser, updateUser, session, can,
   takeBackup, downloadLinks, terminals, resetDemo, openOrders, settledToday,
-  businessDay, api,
+  businessDay, api, syncStatus, syncNow,
 } from '../state.js';
 import { setTopbar, repaint } from '../ui/shell.js';
 import {
@@ -28,6 +28,7 @@ import {
 /** Screen-local: fetched lists that are not part of the live working set. */
 let staff = null;
 let liveTerminals = null;
+let cloud = null;
 let loading = false;
 
 export function renderSettings(host) {
@@ -47,6 +48,7 @@ export function renderSettings(host) {
     renderRoom(),
     renderKitchen(),
     renderPrinting(),
+    renderCloud(),
     renderData(),
     h('p.stat__note', {
       style: { textAlign: 'center', padding: '10px 0 24px' },
@@ -60,6 +62,7 @@ async function load() {
   try {
     if (can('users')) staff = await users();
     if (can('settings')) liveTerminals = await terminals().catch(() => null);
+    if (can('backup')) cloud = await syncStatus().catch(() => null);
   } catch (error) {
     toast(error.message, 'bad', 4000);
   } finally {
@@ -704,6 +707,108 @@ function renderPrinting() {
       'The medallion is embossed behind the items at 5% — visible on good '
       + 'stationery, invisible enough not to fight the figures.',
       chip('On', 'olive')
+    ),
+  ]);
+}
+
+/* -------------------------------------------------------------- cloud --- */
+
+/*
+ * The cloud copy, if the restaurant has one.
+ *
+ * It is a backup and a way to read the takings from somewhere else, never
+ * something the restaurant depends on to trade. The card says plainly when
+ * it last worked, how much is waiting, and what went wrong — because the
+ * question an owner actually has is "is my data safe", and a green tick
+ * nobody can check is not an answer.
+ */
+
+function renderCloud() {
+  if (!can('backup')) return null;
+
+  if (!cloud) {
+    return card('Cloud backup', 'Optional', empty('Asking the till…'));
+  }
+
+  if (!cloud.configured) {
+    return card('Cloud backup', 'Not set up', [
+      setting(
+        'Off',
+        'Saba works entirely on this computer and needs no cloud at all. A '
+        + 'Supabase project adds an off-site copy of the trading, and lets an '
+        + 'owner read the takings from anywhere. See the deployment notes for '
+        + 'how to connect one.',
+        chip('Local only', 'outline')
+      ),
+    ]);
+  }
+
+  const ago = (at) => {
+    if (!at) return 'never';
+    const mins = Math.round((Date.now() - at) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.round(mins / 60);
+    return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+  };
+
+  const healthy = cloud.lastSuccessAt && !cloud.lastError;
+
+  return card('Cloud backup', cloud.project, [
+    setting(
+      'Last sync',
+      cloud.lastError
+        ? cloud.lastError.message
+        : `Every ${cloud.everyMinutes} minutes, and whenever you press Sync now.`,
+      chip(ago(cloud.lastSuccessAt), healthy ? 'olive' : cloud.lastError ? 'danger' : 'outline')
+    ),
+
+    setting(
+      'Waiting to go up',
+      cloud.pending
+        ? Object.entries(cloud.pendingByTable).map(([k, n]) => `${n} ${k}`).join(' · ')
+        : 'Everything on this till has reached the cloud.',
+      chip(String(cloud.pending), cloud.pending ? 'gold' : 'olive')
+    ),
+
+    setting(
+      'Sync now',
+      'Pushes the bills, dockets and audit trail up, and brings back any menu, '
+      + 'price or staff change made in the cloud. Safe to press at any time — '
+      + 'it never interrupts service.',
+      h('button.btn.btn--outline.btn--sm', {
+        type: 'button',
+        disabled: cloud.running,
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            cloud = await syncNow();
+            const up = Object.values(cloud.lastRun?.pushed || {}).reduce((a, b) => a + b, 0);
+            const down = Object.values(cloud.lastRun?.pulled || {}).reduce((a, b) => a + b, 0);
+            toast(up || down
+              ? `Synced — ${up} up, ${down} down`
+              : 'Already up to date', 'good');
+          } catch (error) {
+            toast(error.message, 'bad', 6000);
+            cloud = await syncStatus().catch(() => cloud);
+          } finally {
+            button.disabled = false;
+            repaint();
+          }
+        },
+      }, [icon('refresh', { size: 16 }), cloud.running ? 'Syncing…' : 'Sync now'])
+    ),
+
+    setting(
+      'What goes where',
+      'Bills, dockets, the audit trail and the day\u2019s shifts only ever go up — '
+      + 'the till owns what happened, so nothing in the cloud can change a bill. '
+      + 'The menu, the charges and the staff list go both ways, so a price can '
+      + 'be changed from anywhere. PINs never leave this building.',
+      h('div.u-row.u-wrap', { style: { gap: '5px', justifyContent: 'flex-end' } },
+        cloud.tables.map((t) =>
+          chip(t.name.replace(/_/g, ' '), t.direction === 'both' ? 'gold' : 'outline')))
     ),
   ]);
 }

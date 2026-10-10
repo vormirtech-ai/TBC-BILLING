@@ -70,6 +70,25 @@ export const config = {
 
   /** Keep this many nightly backups before the oldest is deleted. */
   backupKeep: int('SABA_BACKUP_KEEP', 14),
+
+  /* --- the cloud copy, if the restaurant wants one ------------------- */
+
+  /**
+   * A Supabase project to mirror the till into. Leave both blank and the
+   * sync never starts: Saba is a local-first system and a restaurant that
+   * wants nothing to do with the cloud should have to do nothing about it.
+   */
+  supabaseUrl: str('SABA_SUPABASE_URL', ''),
+
+  /**
+   * The service role key. It bypasses row-level security by design, so it
+   * belongs in this process's environment and nowhere else — never in the
+   * database, never in a reply to a browser, never in the log.
+   */
+  supabaseKey: str('SABA_SUPABASE_KEY', ''),
+
+  /** How often the sync runs. It is a backup, not a live link. */
+  syncMinutes: int('SABA_SYNC_MINUTES', 10),
 };
 
 /**

@@ -281,7 +281,30 @@ curl http://localhost:8080/api/health
 
 ---
 
-## 10. The published demonstration
+## 10. An off-site copy (optional)
+
+The nightly backup in §7 lives on the till. That is the backup that matters
+and the one a restore uses — but it is on the machine most likely to be
+stolen or flooded, which is why §7 says to copy it off the premises.
+
+A Supabase project does that automatically, and gives the owner the takings
+on their phone as a side effect. It is entirely optional: leave it
+unconfigured and no connection is ever attempted.
+
+```sh
+# in /etc/saba.env
+SABA_SUPABASE_URL=https://abcdefgh.supabase.co
+SABA_SUPABASE_KEY=<the service role key>
+```
+
+Bills, dockets and the audit trail go up only; the menu, the charges and the
+staff list go both ways; PINs never leave the building. The full setup —
+creating the project, the SQL to run, which key goes where, and how to read
+the reports in Supabase — is **[CLOUD-SYNC.md](CLOUD-SYNC.md)**.
+
+It is not a substitute for §7. Restoring a till uses a real backup file.
+
+## 11. The published demonstration
 
 `node tools/build-site.mjs` builds a static site: a page about Saba and the
 application itself, served against an in-browser till. The GitHub Actions
@@ -302,11 +325,12 @@ it. Two properties are worth knowing:
 To publish it under a different name or path, change the workflow; to stop
 publishing it, delete the workflow. Neither affects an installed till.
 
-## 11. Handing over
+## 12. Handing over
 
 Leave the restaurant with:
 
 - the address to open, written down, and bookmarked on every device;
 - the manager PIN, changed from the one in the log;
 - where the backups go, and who checks them;
-- [OPERATIONS.md](OPERATIONS.md), which is written for them rather than for you.
+- [OPERATIONS.md](OPERATIONS.md), which is written for them rather than for you;
+- whether the Supabase copy is on, and who holds that login.

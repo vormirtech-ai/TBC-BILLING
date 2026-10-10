@@ -159,6 +159,9 @@ cat <<DONE
        journalctl -u saba -f        watch it
        systemctl restart saba       restart it
 
+   To add an off-site copy in Supabase, put SABA_SUPABASE_URL and
+   SABA_SUPABASE_KEY in /etc/saba.env and restart. See docs/CLOUD-SYNC.md.
+
    The database is one file: $DATA_DIR/saba.db
    It is backed up nightly at 04:30 into $DATA_DIR/backups.
    Copy that directory somewhere that is not this computer.

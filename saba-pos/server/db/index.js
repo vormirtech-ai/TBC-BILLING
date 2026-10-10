@@ -20,7 +20,7 @@ import { log } from '../log.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when schema.sql changes in a way an existing database needs told about. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 let db = null;
 
@@ -97,6 +97,15 @@ function migrate(handle) {
   // edit a step that has already shipped.
   const steps = {
     // 1: the initial schema, created by schema.sql above.
+
+    // 2: cancelled bookings are kept rather than deleted, so the cloud copy
+    //    learns they are gone. A row that vanishes cannot be synced.
+    2: (handle) => {
+      const columns = handle.prepare('PRAGMA table_info(reservations)').all();
+      if (!columns.some((c) => c.name === 'deleted_at')) {
+        handle.exec('ALTER TABLE reservations ADD COLUMN deleted_at INTEGER');
+      }
+    },
   };
 
   while (version < SCHEMA_VERSION) {

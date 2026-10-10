@@ -36,6 +36,12 @@ services:
       SABA_SEED_DEMO: "${SABA_SEED_DEMO:-0}"
 
       SABA_LOG_LEVEL: "${SABA_LOG_LEVEL:-info}"
+
+      # The optional cloud copy. Blank means off, and off is the default.
+      # The service role key belongs in .env beside this file, never in it.
+      SABA_SUPABASE_URL: "${SABA_SUPABASE_URL:-}"
+      SABA_SUPABASE_KEY: "${SABA_SUPABASE_KEY:-}"
+      SABA_SYNC_MINUTES: "${SABA_SYNC_MINUTES:-10}"
       SABA_SESSION_HOURS: "${SABA_SESSION_HOURS:-14}"
 
       # Switch both of these on only when the app is served over HTTPS

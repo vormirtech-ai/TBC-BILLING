@@ -14,7 +14,8 @@
     "assets": "python3 tools/make-assets.py brand/saba-logo-master.png",
     "site": "node tools/build-site.mjs",
     "backup": "node tools/backup.mjs",
-    "restore": "node tools/restore.mjs"
+    "restore": "node tools/restore.mjs",
+    "verify-cloud": "node tools/verify-cloud.mjs"
   },
   "dependencies": {},
   "devDependencies": {}

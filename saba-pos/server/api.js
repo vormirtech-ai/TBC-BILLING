@@ -20,6 +20,7 @@ import { Router, readJson, sendJson, sendFileDownload, badRequest, notFound, for
 import * as store from './store.js';
 import * as auth from './auth.js';
 import * as live from './live.js';
+import * as sync from './sync/index.js';
 import { currentRevision, backupTo, tx } from './db/index.js';
 import { config } from './config.js';
 import { log } from './log.js';
@@ -671,6 +672,40 @@ export default router;
    rather than quietly shipping wide open.
    =========================================================================== */
 
+/* -------------------------------------------------------- cloud sync --- */
+
+/**
+ * What the cloud copy knows, and when it last heard from us.
+ *
+ * Never carries the key, and never the URL in full — the host is enough to
+ * tell one project from another on a screen a cashier can see.
+ */
+router.get('/api/sync', async (req, res, ctx) => {
+  auth.requireAbility(ctx.user, 'backup');
+  sendJson(res, 200, { sync: sync.status() });
+});
+
+/** Sync now, rather than waiting for the next pass. */
+router.post('/api/sync', async (req, res, ctx) => {
+  auth.requireAbility(ctx.user, 'backup');
+  if (!sync.isConfigured()) {
+    throw new HttpError(409, 'No Supabase project is configured on this till');
+  }
+  const result = await sync.runOnce({ reason: `manual (${ctx.user.name})` });
+  if (!result.ok && result.error) throw new HttpError(502, result.error);
+  sendJson(res, 200, { result, sync: sync.status() });
+});
+
+/** Does the project answer, and is the schema there? Changes nothing. */
+router.post('/api/sync/check', async (req, res, ctx) => {
+  auth.requireAbility(ctx.user, 'settings');
+  try {
+    sendJson(res, 200, await sync.check());
+  } catch (error) {
+    throw new HttpError(502, error.message);
+  }
+});
+
 const POLICY = {
   'GET /api/health': { open: true },
   'GET /api/session/staff': { open: true },
@@ -740,6 +775,9 @@ const POLICY = {
   'POST /api/authorise': {},
   'POST /api/demo/reset': { ability: 'settings' },
   'POST /api/backup': { ability: 'backup' },
+  'GET /api/sync': { ability: 'backup' },
+  'POST /api/sync': { ability: 'backup' },
+  'POST /api/sync/check': { ability: 'settings' },
   'GET /api/backup/download': { ability: 'backup' },
 };
 

@@ -265,6 +265,9 @@ export const api = {
   terminals: () => get('/api/terminals'),
 
   backup: () => post('/api/backup'),
+  syncStatus: () => get('/api/sync'),
+  syncNow: () => post('/api/sync'),
+  syncCheck: () => post('/api/sync/check'),
   resetDemo: () => post('/api/demo/reset'),
 
   /** Download URLs, handed to the browser rather than fetched. */

@@ -75,7 +75,7 @@ cpSync(join(ROOT, 'app', 'assets'), join(OUT, 'assets'), { recursive: true });
 // The documentation, rendered. Served as .md it would arrive as a wall of
 // plain text or a download, which is a poor advertisement for a product whose
 // documentation is one of the things being sold.
-for (const name of ['DEPLOYMENT', 'OPERATIONS', 'HANDOVER']) {
+for (const name of ['DEPLOYMENT', 'OPERATIONS', 'CLOUD-SYNC', 'HANDOVER']) {
   const source = read('docs', `${name}.md`);
   write(`docs/${name}.html`, document(titleOf(source), markdownToHtml(source)));
   write(`docs/${name}.md`, source);      // the original, for anyone who wants it
@@ -218,6 +218,7 @@ ${landingCss()}
         <p class="lede">
           <a href="docs/DEPLOYMENT.html">Deployment</a> ·
           <a href="docs/OPERATIONS.html">Running it day to day</a> ·
+          <a href="docs/CLOUD-SYNC.html">The optional cloud copy</a> ·
           <a href="docs/HANDOVER.html">Taking over the code</a>
         </p>
       </section>

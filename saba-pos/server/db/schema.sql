@@ -115,7 +115,10 @@ CREATE TABLE IF NOT EXISTS reservations (
   day       TEXT NOT NULL,
   status    TEXT NOT NULL,
   doc       TEXT NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  -- Cancelled, not erased: a row that simply vanished could never be synced
+  -- to the cloud copy, which would go on showing a booking nobody has.
+  deleted_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS reservations_day ON reservations (day);
 
@@ -147,3 +150,17 @@ CREATE TABLE IF NOT EXISTS shifts (
 );
 CREATE INDEX IF NOT EXISTS shifts_day ON shifts (day);
 CREATE INDEX IF NOT EXISTS shifts_open ON shifts (closed_at) WHERE closed_at IS NULL;
+
+-- Where the cloud copy has got to.
+--
+-- One row per table per direction, holding the `updated_at` of the newest row
+-- already sent or received. The sync is a high-water mark and nothing more:
+-- no change log to keep in step with the writes, and a till that has been off
+-- for a week catches up by the same path as one that has been off for a
+-- minute. See server/sync/ and docs/CLOUD-SYNC.md.
+CREATE TABLE IF NOT EXISTS sync_state (
+  name      TEXT PRIMARY KEY,           -- e.g. "push:orders", "pull:menu_items"
+  watermark INTEGER NOT NULL DEFAULT 0,
+  rows      INTEGER NOT NULL DEFAULT 0, -- how many have gone that way, ever
+  at        INTEGER NOT NULL DEFAULT 0  -- when it last moved
+);

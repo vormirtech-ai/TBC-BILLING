@@ -5,6 +5,7 @@
  *   node tests/all.mjs unit       the domain only, no server
  *   node tests/all.mjs api        the API only
  *   node tests/all.mjs till       the published demonstration only
+ *   node tests/all.mjs sync       the cloud copy only
  *
  * No framework, no dependencies, no build step — the same constraints the
  * application itself runs under.
@@ -28,9 +29,15 @@ const TILL = [
   './till/parity.test.mjs',
 ];
 
+/** The cloud copy, against a stand-in for Supabase. */
+const SYNC = [
+  './sync/sync.test.mjs',
+];
+
 const files = only === 'unit' ? UNIT
   : only === 'api' ? API
     : only === 'till' ? TILL
-      : [...UNIT, ...API, ...TILL];
+      : only === 'sync' ? SYNC
+        : [...UNIT, ...API, ...TILL, ...SYNC];
 
 await run(files);

@@ -259,7 +259,9 @@ export function buildWorkedExample({ today, users, uid }) {
       const sat = between(random, 55, 100);
       insertOrder(makeSettledOrder({
         random,
-        openedAt: Date.now() - (closedAgo + sat) * MIN,
+        // Rounded: a timestamp is a whole number of milliseconds, and a
+        // fractional one is rejected outright by a database with real types.
+        openedAt: Math.round(Date.now() - (closedAgo + sat) * MIN),
         tableId: free[i % free.length].id,
         covers: between(random, 2, 6),
         guest: pick(random, GUESTS),

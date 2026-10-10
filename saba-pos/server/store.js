@@ -786,7 +786,7 @@ export function reopenOrder(orderId, approver) {
 /* -------------------------------------------------------- reservations --- */
 
 export const listReservations = (day = today()) =>
-  all('SELECT doc FROM reservations WHERE day = ? ORDER BY at', day)
+  all('SELECT doc FROM reservations WHERE day = ? AND deleted_at IS NULL ORDER BY at', day)
     .map((r) => JSON.parse(r.doc));
 
 export function saveReservation(input, user) {
@@ -820,7 +820,10 @@ export function saveReservation(input, user) {
 export function dropReservation(id, user) {
   const row = one('SELECT doc FROM reservations WHERE id = ?', id);
   if (!row) throw notFound('No such booking');
-  run('DELETE FROM reservations WHERE id = ?', id);
+  // Marked gone rather than erased, so the cloud copy learns about it too.
+  // A row that simply vanishes can never be synced.
+  run('UPDATE reservations SET deleted_at = ?, updated_at = ? WHERE id = ?',
+    Date.now(), Date.now(), id);
   audit('BOOKING', `Removed booking for ${JSON.parse(row.doc).name}`, { actor: user.name });
   bumpRevision();
 }

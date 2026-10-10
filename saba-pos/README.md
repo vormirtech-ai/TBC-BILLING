@@ -33,6 +33,7 @@ third year of using it.
 | **Book** | Reservations with covers, time, table and a note, carried through to the floor plan. |
 | **Menu** | Add a dish, price it, move it between sections, courses and stations, retire it, and 86 it from anywhere in the building. |
 | **Setup** | The bill header, staff and their PINs, the service charge and tax rates, the rooms and tables, backups, and the live list of terminals. |
+| **Cloud** | Optional. An off-site copy in Supabase: bills and the audit trail push up, the menu and staff sync both ways, and the takings are readable from anywhere. Off by default, and the restaurant trades the same without it. |
 
 Every screen is one of four roles' business — manager, captain, cashier,
 kitchen — and the server enforces that, not the interface.
@@ -102,17 +103,39 @@ otherwise have to find out the hard way:
 npm test
 ```
 
-Eighty-three cases: the pricing and order maths as pure functions, the API
-against a real server on a real SQLite database over real HTTP, and the
-published demonstration held against the product it demonstrates. Nothing is
-mocked. A point of sale is a thing that takes money; a suite that stubs out
+Ninety-five cases: the pricing and order maths as pure functions, the API
+against a real server on a real SQLite database over real HTTP, the published
+demonstration held against the product it demonstrates, and the cloud sync
+against a stand-in for Supabase. Nothing is mocked. A point of sale is a thing that takes money; a suite that stubs out
 the database proves only that the stubs work.
 
 ```sh
 npm test unit     # the domain, instantly
 npm test api      # a real server per case
 npm test till     # the demonstration, against the real thing
+npm test sync     # the cloud copy
 ```
+
+The Supabase SQL is verified separately, against an actual PostgreSQL, since
+the test suite must not need one:
+
+```sh
+npm run verify-cloud "postgresql://user@host/db"
+```
+
+## An off-site copy, if the restaurant wants one
+
+Saba needs no cloud and asks for none. Point it at a Supabase project and it
+will also keep a copy there: bills, dockets and the audit trail push up,
+while the menu, the charges and the staff list sync both ways, so a price can
+be changed from a phone.
+
+Bills only ever travel upward — the till owns what happened, and nothing in
+the cloud can alter what a guest was charged. PINs never leave the building
+at all.
+
+**[docs/CLOUD-SYNC.md](docs/CLOUD-SYNC.md)** — creating the project, the SQL to
+run, where each key goes, and how to read the takings in Supabase.
 
 ## Requirements
 
