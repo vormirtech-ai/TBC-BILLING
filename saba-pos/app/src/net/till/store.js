@@ -58,6 +58,7 @@ export const db = {
   eightySix: new Map(),
   audit: [],
   shifts: [],
+  attendance: [],
   settings: {},
   session: null,
 };
@@ -75,6 +76,7 @@ export function reset() {
   db.eightySix = new Map();
   db.audit = [];
   db.shifts = [];
+  db.attendance = [];
   db.session = null;
   db.settings = {
     restaurant: structuredClone(RESTAURANT),
@@ -263,6 +265,9 @@ export function createMenuItem(input) {
     course: input.course,
     pricePaise: Math.max(0, Math.round(Number(input.pricePaise) || 0)),
     costPaise: Math.max(0, Math.round(Number(input.costPaise) || 0)),
+    halfPricePaise: Number(input.halfPricePaise) > 0
+      ? Math.round(Number(input.halfPricePaise))
+      : null,
     description: String(input.description || '').slice(0, 240),
     diet: input.diet === 'NON_VEG' ? 'NON_VEG' : 'VEG',
     allergens: [],
@@ -413,7 +418,8 @@ function resolveModifiers(item, ids) {
   return out;
 }
 
-export function addOrderLine(orderId, { itemId, qty, seat, course, modifierIds, notes }) {
+export function addOrderLine(orderId,
+  { itemId, qty, seat, course, modifierIds, notes, portion }) {
   const item = menuItem(itemId);
   if (!item) throw notFound('No such dish');
   if (!item.available) throw conflict(`${item.name} is 86 tonight`);
@@ -425,6 +431,7 @@ export function addOrderLine(orderId, { itemId, qty, seat, course, modifierIds, 
       seat: seat ? Math.max(1, Math.min(40, Number(seat))) : null,
       course: course || item.course,
       modifiers: chosen,
+      portion: portion === 'HALF' ? 'HALF' : 'FULL',
       notes: String(notes || '').slice(0, 240),
     });
   }).order;
@@ -565,6 +572,10 @@ export function addPayment(orderId, { method, paise, ref, shareId }, user) {
       at: Date.now(),
       by: user.name,
     });
+    audit('PAYMENT',
+      `${method} ${(amount / 100).toFixed(2)} taken on Table ${order.tableLabel}`
+      + (ref ? ` — ref ${String(ref).slice(0, 60)}` : ''),
+      { actor: user.name, meta: { orderId, method, paise: amount } });
   }).order;
 }
 
@@ -647,6 +658,57 @@ export function dropReservation(id, user) {
   audit('BOOKING', `Cancelled the booking for ${row.name}`, { actor: user.name });
   bump();
   return row;
+}
+
+/* ---------------------------------------------------------- attendance --- */
+
+export const openSpell = (userId) =>
+  db.attendance.filter((a) => a.user_id === userId && a.clock_out === null).at(-1) || null;
+
+const withMinutes = (row) => ({
+  ...row,
+  open: row.clock_out === null,
+  minutes: Math.max(0, Math.round(((row.clock_out ?? Date.now()) - row.clock_in) / 60000)),
+});
+
+export const attendanceOn = (day = today(), userId = null) =>
+  db.attendance
+    .filter((a) => a.day === day && (!userId || a.user_id === userId))
+    .sort((a, b) => a.clock_in - b.clock_in)
+    .map(withMinutes);
+
+export function clockIn(user) {
+  if (openSpell(user.id)) throw conflict(`${user.name} is already clocked in`);
+  const row = {
+    id: uid('at'),
+    user_id: user.id,
+    user_name: user.name,
+    role: user.role,
+    day: today(),
+    clock_in: Date.now(),
+    clock_out: null,
+    note: '',
+    updated_at: Date.now(),
+  };
+  db.attendance.push(row);
+  audit('ATTENDANCE', `${user.name} clocked in`, { actor: user.name });
+  bump();
+  return withMinutes(row);
+}
+
+export function clockOut(user, { note = '' } = {}) {
+  const spell = openSpell(user.id);
+  if (!spell) throw conflict(`${user.name} is not clocked in`);
+  spell.clock_out = Date.now();
+  spell.note = String(note).slice(0, 120);
+  spell.updated_at = Date.now();
+
+  const minutes = Math.round((spell.clock_out - spell.clock_in) / 60000);
+  audit('ATTENDANCE',
+    `${user.name} clocked out — ${Math.floor(minutes / 60)}h ${minutes % 60}m`,
+    { actor: user.name });
+  bump();
+  return withMinutes(spell);
 }
 
 /* -------------------------------------------------------------- shifts --- */

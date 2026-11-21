@@ -37,10 +37,12 @@ export const MODIFIER_GROUPS = {
       { id: 'hot', label: 'Chef’s heat', deltaPaise: 0 },
     ],
   },
+  // Half plates are a price on the dish (see `halfPricePaise`), not a
+  // modifier: a half Maqluba is not a full one with money taken off, and a
+  // kitchen docket has to say HALF where the cook can see it.
   portion: {
     id: 'portion', label: 'Portion', required: false, max: 1,
     options: [
-      { id: 'half', label: 'Half portion', deltaPaise: -18000 },
       { id: 'sharing', label: 'Sharing platter', deltaPaise: 45000 },
     ],
   },
@@ -107,6 +109,13 @@ const item = (id, name, category, pricePaise, station, course, opts = {}) => ({
   name,
   category,
   pricePaise,
+  /**
+   * What a half plate costs, or null where the dish does not come as one.
+   *
+   * A price of its own rather than a fraction: a half portion of biryani is
+   * not half the work, and every restaurant prices it where it likes.
+   */
+  halfPricePaise: opts.halfPricePaise ?? null,
   station,
   course,
   diet: opts.diet || 'VEG',
@@ -164,6 +173,7 @@ export const MENU_ITEMS = [
 
   /* ------------------------------------------------------------ tandoor -- */
   item('t01', 'Shish Taouk', 'tandoor', 82000, 'TANDOOR', 'MAIN', {
+    halfPricePaise: 48000,
     diet: 'NONVEG', allergens: ['D'],
     description: 'Charcoal chicken, garlic toum, pickled turnip',
     mods: ['spice'],
@@ -199,14 +209,17 @@ export const MENU_ITEMS = [
 
   /* -------------------------------------------------------------- mains -- */
   item('n01', 'Ghormeh Sabzi', 'mains', 94000, 'HOT', 'MAIN', {
+    halfPricePaise: 52000,
     diet: 'NONVEG', signature: true,
     description: 'Herb stew, dried lime, red kidney bean, lamb shank',
   }),
   item('n02', 'Fesenjan', 'mains', 98000, 'HOT', 'MAIN', {
+    halfPricePaise: 58000,
     diet: 'NONVEG', allergens: ['N'],
     description: 'Pomegranate and walnut, slow-braised duck',
   }),
   item('n03', 'Maqluba', 'mains', 86000, 'HOT', 'MAIN', {
+    halfPricePaise: 50000,
     allergens: ['N'], description: 'Upturned rice, aubergine, cauliflower, almond',
     mods: ['portion'],
   }),
@@ -216,6 +229,7 @@ export const MENU_ITEMS = [
     mods: ['portion'],
   }),
   item('n05', 'Molokhia', 'mains', 84000, 'HOT', 'MAIN', {
+    halfPricePaise: 46000,
     diet: 'NONVEG', description: 'Jute leaf, coriander-garlic taqliya, chicken',
   }),
   item('n06', 'Shakshuka Royale', 'mains', 72000, 'HOT', 'MAIN', {
@@ -224,13 +238,16 @@ export const MENU_ITEMS = [
 
   /* --------------------------------------------------------------- rice -- */
   item('r01', 'Zereshk Polo', 'rice', 42000, 'HOT', 'MAIN', {
+    halfPricePaise: 15000,
     allergens: ['D'], description: 'Barberry, saffron, pistachio',
   }),
   item('r02', 'Baghali Polo', 'rice', 40000, 'HOT', 'MAIN', {
+    halfPricePaise: 17000,
     diet: 'VEGAN', description: 'Broad bean and dill rice',
   }),
   item('r03', 'Vermicelli Rice', 'rice', 32000, 'HOT', 'MAIN', { diet: 'VEGAN' }),
   item('r04', 'Khubz, Wood-Fired', 'rice', 18000, 'TANDOOR', 'MAIN', {
+    halfPricePaise: 12000,
     diet: 'VEGAN', allergens: ['G'], description: 'Baked to order',
     costPaise: 1900, // flour, water and the oven that is already lit
   }),

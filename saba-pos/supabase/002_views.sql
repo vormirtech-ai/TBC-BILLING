@@ -127,6 +127,26 @@ order by at desc;
 comment on view public.v_exceptions is
   'Voids, comps, discounts and reopened bills, newest first, with who did it.';
 
+-- Hours worked, for payroll.
+create or replace view public.v_hours as
+select
+  day,
+  user_name,
+  role,
+  count(*)                                              as spells,
+  min(to_timestamp(clock_in / 1000))                    as first_in,
+  max(to_timestamp(coalesce(clock_out, clock_in) / 1000)) as last_out,
+  sum(coalesce(clock_out, (extract(epoch from now()) * 1000)::bigint) - clock_in)
+    / 60000                                             as minutes,
+  round(sum(coalesce(clock_out, (extract(epoch from now()) * 1000)::bigint) - clock_in)
+    / 3600000.0, 2)                                     as hours
+from public.attendance
+group by day, user_id, user_name, role
+order by day desc, minutes desc;
+
+comment on view public.v_hours is
+  'Hours per person per business day. A spell still open counts up to now.';
+
 -- Is the till still talking to us?
 create or replace view public.v_sync_health as
 select
@@ -135,6 +155,7 @@ union all select 'audit',        count(*), max(synced_at) from public.audit
 union all select 'shifts',       count(*), max(synced_at) from public.shifts
 union all select 'reservations', count(*), max(synced_at) from public.reservations
 union all select 'menu_items',   count(*), max(synced_at) from public.menu_items
+union all select 'attendance',   count(*), max(synced_at) from public.attendance
 union all select 'users',        count(*), max(synced_at) from public.users;
 
 comment on view public.v_sync_health is

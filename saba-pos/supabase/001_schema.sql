@@ -106,6 +106,23 @@ create table if not exists public.eighty_six (
   synced_at timestamptz not null default now()
 );
 
+-- Who was in, and for how long. One row per spell on the premises; hours are
+-- clock_out minus clock_in, never a stored figure that could disagree.
+create table if not exists public.attendance (
+  id         text primary key,
+  user_id    text not null,
+  user_name  text not null,
+  role       text not null,
+  day        date not null,
+  clock_in   bigint not null,
+  clock_out  bigint,
+  note       text not null default '',
+  updated_at bigint not null,
+  synced_at  timestamptz not null default now()
+);
+create index if not exists attendance_day on public.attendance (day);
+create index if not exists attendance_user on public.attendance (user_id);
+
 -- ---------------------------------------------------------------------------
 -- The three the till will read back
 -- ---------------------------------------------------------------------------
@@ -164,8 +181,8 @@ do $$
 declare t text;
 begin
   foreach t in array array['orders', 'audit', 'shifts', 'counters',
-                           'reservations', 'eighty_six', 'menu_items',
-                           'settings', 'users']
+                           'reservations', 'eighty_six', 'attendance',
+                           'menu_items', 'settings', 'users']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
@@ -184,8 +201,8 @@ do $$
 declare t text;
 begin
   foreach t in array array['orders', 'audit', 'shifts', 'counters',
-                           'reservations', 'eighty_six', 'menu_items',
-                           'settings', 'users']
+                           'reservations', 'eighty_six', 'attendance',
+                           'menu_items', 'settings', 'users']
   loop
     execute format('drop trigger if exists %I on public.%I', t || '_synced_at', t);
     execute format(

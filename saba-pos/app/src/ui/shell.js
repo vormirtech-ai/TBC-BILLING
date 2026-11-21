@@ -22,6 +22,7 @@ const NAV = [
   { path: '/kds', label: 'Kitchen', glyph: 'kds' },
   { path: '/bill', label: 'Bills', glyph: 'bill' },
   { path: '/reservations', label: 'Book', glyph: 'book' },
+  { path: '/attendance', label: 'Hours', glyph: 'clock' },
   { path: '/reports', label: 'Reports', glyph: 'reports' },
   { path: '/menu', label: 'Menu', glyph: 'menu' },
   { path: '/settings', label: 'Setup', glyph: 'settings' },

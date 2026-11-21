@@ -109,6 +109,17 @@ export const TABLES = [
   },
 
   {
+    name: 'attendance',
+    direction: 'push',
+    key: 'id',
+    cursor: 'updated_at',
+    // Hours worked are payroll, so they go up for safekeeping. They never
+    // come back: a spell is a fact about a door, and the till watched it.
+    columns: ['id', 'user_id', 'user_name', 'role', 'day', 'clock_in',
+      'clock_out', 'note', 'updated_at'],
+  },
+
+  {
     name: 'menu_items',
     direction: 'both',
     key: 'id',

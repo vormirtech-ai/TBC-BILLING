@@ -190,6 +190,7 @@ export const addItem = (orderId, item, options = {}) => command(api.addLine(orde
   seat: options.seat ?? null,
   course: options.course || item.course,
   modifierIds: (options.modifiers || []).map((m) => m.id),
+  portion: options.portion || 'FULL',
   notes: options.notes || '',
 }));
 
@@ -272,6 +273,10 @@ export const setReservationStatus = (id, status) =>
 /* -------------------------------------------------------------- admin --- */
 
 export const reports = (from, to) => api.reports(from, to);
+export const attendance = (opts) => api.attendance(opts);
+export const clockIn = () => api.clockIn().then((r) => { replica.seenRevision(r.revision, 'hours'); return r.spell; });
+export const clockOut = (note) => api.clockOut(note).then((r) => { replica.seenRevision(r.revision, 'hours'); return r.spell; });
+
 export const dayReport = (day) => api.dayReport(day || businessDay());
 export const auditFor = (day) => api.audit(day);
 export const users = () => api.users().then((r) => r.users);

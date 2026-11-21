@@ -75,21 +75,22 @@ function seedSettings() {
 function seedFirstUsers() {
   const pin = config.setupPin || generatePin();
 
-  auth.createUser({ name: 'Manager', role: 'manager', pin });
+  auth.createUser({ name: 'Owner', role: 'admin', pin });
 
   if (config.seedDemo) {
     // The worked example needs somebody on the floor and somebody at the pass.
     auth.createUser({ name: 'Alina Rahman', role: 'captain', pin: '2471' });
-    auth.createUser({ name: 'Devesh Kamat', role: 'cashier', pin: '3582' });
+    auth.createUser({ name: 'Devesh Kamat', role: 'manager', pin: '3582' });
+    auth.createUser({ name: 'Priya Nair', role: 'waiter', pin: '5814' });
     auth.createUser({ name: 'Kitchen Pass', role: 'kitchen', pin: '4693' });
   }
 
   log.warn('─'.repeat(64));
-  log.warn('  FIRST RUN — the manager PIN for this install is:  ' + pin);
+  log.warn('  FIRST RUN — the owner (admin) PIN for this install is:  ' + pin);
   log.warn('  Sign in with it, then add your staff under Setup → People.');
   log.warn('  It is shown once. Change it from Setup after signing in.');
   if (config.seedDemo) {
-    log.warn('  Demo accounts: captain 2471 · cashier 3582 · kitchen 4693');
+    log.warn('  Demo accounts: captain 2471 · manager 3582 · waiter 5814 · kitchen 4693');
   }
   log.warn('─'.repeat(64));
 }
@@ -120,13 +121,13 @@ function seedDemo() {
   const started = Date.now();
 
   const staff = auth.listUsers();
-  const manager = staff.find((u) => u.role === 'manager');
+  const manager = staff.find((u) => u.role === 'admin');
   const example = buildWorkedExample({
     today: store.today(),
     users: {
       manager,
       captain: staff.find((u) => u.role === 'captain') || manager,
-      cashier: staff.find((u) => u.role === 'cashier') || manager,
+      cashier: staff.find((u) => u.role === 'manager') || manager,
     },
     uid: () => `pay_${randomUUID().slice(0, 12)}`,
   });

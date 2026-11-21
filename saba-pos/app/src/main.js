@@ -31,6 +31,7 @@ import { renderOrder } from './views/order.view.js';
 import { renderKds, stopKdsClock } from './views/kds.view.js';
 import { renderBillView } from './views/bill.view.js';
 import { renderReservations } from './views/reservations.view.js';
+import { renderAttendance } from './views/attendance.view.js';
 import { renderReports } from './views/reports.view.js';
 import { renderMenuAdmin } from './views/menu.view.js';
 import { renderSettings } from './views/settings.view.js';
@@ -176,6 +177,7 @@ function registerRoutes() {
   defineRoute('/kds', screen(renderKds, 'kds'));
   defineRoute('/bill', screen(renderBillView, 'bill'));
   defineRoute('/reservations', screen(renderReservations, 'book'));
+  defineRoute('/attendance', screen(renderAttendance, 'clock'));
   defineRoute('/reports', screen(renderReports, 'reports'));
   defineRoute('/menu', screen(renderMenuAdmin, 'menu'));
   defineRoute('/settings', screen(renderSettings, 'settings'));

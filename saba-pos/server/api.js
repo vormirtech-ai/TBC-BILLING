@@ -209,6 +209,7 @@ router.post('/api/orders/:id/lines', async (req, res, ctx) => {
     seat: body.seat,
     course: body.course,
     modifierIds: body.modifierIds,
+    portion: body.portion,
     notes: body.notes,
   }, ctx.user));
 });
@@ -239,6 +240,22 @@ router.post('/api/orders/:id/lines/:lineId/comp', async (req, res, ctx) => {
     reason: String(body.reason || '').slice(0, 120),
     approver,
   }));
+});
+
+/**
+ * Move one dish to another table, because it was carried to the wrong one.
+ *
+ * A manager's call: it moves money between two guests' bills, and the guest
+ * who did not order it is about to be asked to pay for it.
+ */
+router.post('/api/orders/:id/lines/:lineId/move', async (req, res, ctx) => {
+  const body = await readJson(req);
+  if (!body.toOrderId) throw badRequest('Which table is it going to?');
+  const approver = approvalFrom(body, ctx, 'moveLine');
+  const { from } = store.moveLineToOrder(
+    req.params.id, req.params.lineId, body.toOrderId, { approver }
+  );
+  withOrder(res, from);
 });
 
 router.post('/api/orders/:id/fire', async (req, res, ctx) => {
@@ -394,6 +411,11 @@ router.patch('/api/menu/:itemId', async (req, res, ctx) => {
 
   const next = { ...existing };
   if (body.pricePaise !== undefined) next.pricePaise = Math.max(0, asInt(body.pricePaise));
+  if (body.halfPricePaise !== undefined) {
+    next.halfPricePaise = body.halfPricePaise === null
+      ? null
+      : Math.max(0, asInt(body.halfPricePaise));
+  }
   if (body.costPaise !== undefined) next.costPaise = Math.max(0, asInt(body.costPaise));
   if (body.name !== undefined) next.name = String(body.name).slice(0, 80);
   if (body.description !== undefined) next.description = String(body.description).slice(0, 240);
@@ -672,6 +694,42 @@ export default router;
    rather than quietly shipping wide open.
    =========================================================================== */
 
+/* -------------------------------------------------------- attendance --- */
+
+/**
+ * Who was in, and when.
+ *
+ * Everybody from a waiter upward marks their own. Only the owner sees the
+ * whole roster — a waiter has no business reading when the chef came in, and
+ * `all=1` is refused without the ability rather than quietly narrowed, so
+ * nobody is left wondering why the list looks short.
+ */
+router.get('/api/attendance', async (req, res, ctx) => {
+  const day = req.query.get('day') || store.today();
+  const everyone = req.query.get('all') === '1';
+  if (everyone) auth.requireAbility(ctx.user, 'attendanceAll');
+
+  sendJson(res, 200, {
+    day,
+    mine: store.attendanceOn(day, ctx.user.id),
+    open: store.openSpell(ctx.user.id),
+    everyone: everyone ? store.attendanceOn(day) : null,
+    revision: currentRevision(),
+  });
+});
+
+router.post('/api/attendance/in', async (req, res, ctx) => {
+  sendJson(res, 200, { spell: store.clockIn(ctx.user), revision: currentRevision() });
+});
+
+router.post('/api/attendance/out', async (req, res, ctx) => {
+  const body = await readJson(req);
+  sendJson(res, 200, {
+    spell: store.clockOut(ctx.user, { note: body.note }),
+    revision: currentRevision(),
+  });
+});
+
 /* -------------------------------------------------------- cloud sync --- */
 
 /**
@@ -731,6 +789,7 @@ const POLICY = {
   'DELETE /api/orders/:id/lines/:lineId': { screen: '/order' },
   'POST /api/orders/:id/lines/:lineId/void': { screen: '/order' },
   'POST /api/orders/:id/lines/:lineId/comp': { screen: '/order' },
+  'POST /api/orders/:id/lines/:lineId/move': { screen: '/order', ability: 'moveLine' },
   'POST /api/orders/:id/fire': { screen: '/order' },
 
   'POST /api/kots/:kotId/status': { screen: '/kds' },
@@ -755,6 +814,10 @@ const POLICY = {
   'POST /api/reservations': { screen: '/reservations' },
   'PATCH /api/reservations/:id': { screen: '/reservations' },
   'DELETE /api/reservations/:id': { screen: '/reservations' },
+
+  'GET /api/attendance': { screen: '/attendance' },
+  'POST /api/attendance/in': { screen: '/attendance' },
+  'POST /api/attendance/out': { screen: '/attendance' },
 
   'GET /api/reports': { screen: '/reports' },
   'GET /api/reports/day/:day': { screen: '/reports' },

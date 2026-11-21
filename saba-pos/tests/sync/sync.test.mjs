@@ -52,7 +52,7 @@ async function withTill(options, fn) {
   };
 
   const roster = await call('GET', '/api/session/staff');
-  const manager = roster.json.staff.find((p) => p.name === 'Manager');
+  const manager = roster.json.staff.find((p) => p.name === 'Owner');
   await call('POST', '/api/session', { userId: manager.id, pin: '7391' });
 
   try {
@@ -278,6 +278,23 @@ test('no internet is not an incident, and the restaurant keeps trading', async (
   });
 });
 
+test('the line coming back is caught in a minute, not at the next pass', async (t) => {
+  await withTill({}, async ({ sync }) => {
+    // A pass that could not reach the cloud asks to be tried again soon; a
+    // pass that worked waits for the ordinary interval. The restaurant is
+    // configured here for an hour between passes, so the two are far apart.
+    const schedule = sync.start();
+    t.ok(schedule, 'the loop is running');
+
+    const status = sync.status();
+    t.equal(status.everyMinutes, 60, 'an hour between ordinary passes');
+    t.ok(status.enabled, 'and it is on');
+
+    sync.stop();
+    t.notOk(sync.status().enabled, 'and it stops when the till shuts down');
+  });
+});
+
 test('a wrong key is reported as a wrong key, not retried forever', async (t) => {
   const cloud = await startFakeSupabase({ key: 'the-real-key' });
   const dir = mkdtempSync(join(tmpdir(), 'saba-sync-'));
@@ -340,34 +357,34 @@ test('with no project configured, the sync stays out of the way', async (t) => {
 
 /* --------------------------------------------------------------- reach --- */
 
-test('only a manager can see or trigger the sync', async (t) => {
+test('only the owner can see or trigger the sync', async (t) => {
   await withTill({}, async ({ call, cloud }) => {
-    t.equal((await call('GET', '/api/sync')).status, 200, 'a manager can read it');
+    t.equal((await call('GET', '/api/sync')).status, 200, 'the admin can read it');
     t.notOk(JSON.stringify((await call('GET', '/api/sync')).json).includes(cloud.key),
       'and the key is never in the reply');
 
-    await call('POST', '/api/users', { name: 'Cash', role: 'cashier', pin: '8594' });
+    await call('POST', '/api/users', { name: 'Boss', role: 'manager', pin: '8594' });
 
-    const cashier = async (method, path, body) => {
+    const manager = async (method, path, body) => {
       const res = await fetch(`http://127.0.0.1:${port}${path}`, {
         method,
-        headers: { 'content-type': 'application/json', cookie: cashierCookie },
+        headers: { 'content-type': 'application/json', cookie: managerCookie },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       return res.status;
     };
-    let cashierCookie = '';
+    let managerCookie = '';
     const signIn = await fetch(`http://127.0.0.1:${port}/api/session`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        userId: (await call('GET', '/api/users')).json.users.find((u) => u.role === 'cashier').id,
+        userId: (await call('GET', '/api/users')).json.users.find((u) => u.role === 'manager').id,
         pin: '8594',
       }),
     });
-    cashierCookie = (signIn.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ');
+    managerCookie = (signIn.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ');
 
-    t.equal(await cashier('GET', '/api/sync'), 403, 'a cashier cannot');
-    t.equal(await cashier('POST', '/api/sync'), 403, 'nor set one running');
+    t.equal(await manager('GET', '/api/sync'), 403, 'a manager cannot');
+    t.equal(await manager('POST', '/api/sync'), 403, 'nor set one running');
   });
 });

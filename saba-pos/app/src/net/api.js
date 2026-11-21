@@ -249,6 +249,11 @@ export const api = {
     : post('/api/reservations', body)),
   dropReservation: (id) => del(`/api/reservations/${id}`),
 
+  attendance: ({ day, all } = {}) =>
+    get('/api/attendance', { day, all: all ? '1' : undefined }),
+  clockIn: () => post('/api/attendance/in'),
+  clockOut: (note) => post('/api/attendance/out', { note }),
+
   reports: (from, to) => get('/api/reports', { from, to }),
   dayReport: (day) => get(`/api/reports/day/${day}`),
   audit: (day) => get('/api/audit', { day }),

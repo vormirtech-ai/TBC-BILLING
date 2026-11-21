@@ -72,20 +72,22 @@ export const CHARGES = {
 /* ---------------------------------------------------------------- roles --- */
 
 export const ROLES = {
+  ADMIN: 'admin',
   MANAGER: 'manager',
   CAPTAIN: 'captain',
-  CASHIER: 'cashier',
+  WAITER: 'waiter',
   KITCHEN: 'kitchen',
 };
 
 export const ROLE_LABELS = {
+  admin: 'Owner / Admin',
   manager: 'Restaurant Manager',
   captain: 'Captain',
-  cashier: 'Cashier',
+  waiter: 'Waiter',
   kitchen: 'Kitchen',
 };
 
-export const ROLE_ORDER = ['manager', 'captain', 'cashier', 'kitchen'];
+export const ROLE_ORDER = ['admin', 'manager', 'captain', 'waiter', 'kitchen'];
 
 /**
  * What each role may reach. The browser only draws what the signed-in role can
@@ -93,18 +95,25 @@ export const ROLE_ORDER = ['manager', 'captain', 'cashier', 'kitchen'];
  * here. The client-side check is a courtesy; the server-side one is the rule.
  */
 export const ROLE_ROUTES = {
-  manager: ['/floor', '/order', '/kds', '/bill', '/reservations', '/reports', '/menu', '/settings'],
-  captain: ['/floor', '/order', '/kds', '/bill', '/reservations'],
-  cashier: ['/floor', '/order', '/bill', '/reports'],
+  // The takings are the owner's business and nobody else's, so /reports and
+  // /settings are admin only. Everything below it runs the restaurant.
+  admin: ['/floor', '/order', '/kds', '/bill', '/reservations', '/attendance',
+    '/reports', '/menu', '/settings'],
+  manager: ['/floor', '/order', '/kds', '/bill', '/reservations', '/attendance', '/menu'],
+  captain: ['/floor', '/order', '/kds', '/bill', '/reservations', '/attendance'],
+  waiter: ['/floor', '/order', '/attendance'],
   kitchen: ['/kds'],
 };
 
 /** Abilities finer-grained than a whole screen. Enforced on the server. */
 export const ROLE_ABILITIES = {
-  manager: ['void', 'discount', 'comp', 'reopen', 'settings', 'eightySix',
-    'reprint', 'users', 'shift', 'export', 'backup'],
+  admin: ['void', 'discount', 'comp', 'reopen', 'settings', 'eightySix',
+    'reprint', 'users', 'shift', 'export', 'backup', 'attendanceAll',
+    'moveLine', 'cancelOrder'],
+  manager: ['void', 'discount', 'comp', 'eightySix', 'reprint', 'shift',
+    'moveLine', 'cancelOrder'],
   captain: ['eightySix', 'reprint'],
-  cashier: ['discount', 'reprint', 'shift', 'export'],
+  waiter: [],
   kitchen: [],
 };
 

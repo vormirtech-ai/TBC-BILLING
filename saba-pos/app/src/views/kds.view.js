@@ -19,7 +19,7 @@ import { h, fill, $$ } from '../core/dom.js';
 import { STATIONS, KOT_STATUS, stationById, courseById } from '../shared/config.js';
 import { timer, clockTime, plural } from '../shared/format.js';
 import { openTickets, allDay } from '../shared/reports.js';
-import { kotLines } from '../shared/orders.js';
+import { kotLines, lineName } from '../shared/orders.js';
 import {
   openOrders, bumpKot, killKot, markReprint, orderById, users, } from '../state.js';
 import { setTopbar, repaint } from '../ui/shell.js';
@@ -171,7 +171,7 @@ function renderTicket({ order, kot, sla }, host, opts = {}) {
         ...group.items.map((line) => h('div.tline', {}, [
           h('span.tline__qty', { text: String(line.qty) }),
           h('div', {}, [
-            h('div.tline__name', { text: line.name }),
+            h('div.tline__name', { text: lineName(line) }),
             line.seat ? h('div.tline__seat', { text: `SEAT ${line.seat}` }) : null,
             line.modifiers.length
               ? h('div.tline__mods', { text: line.modifiers.map((m) => m.label).join(' · ') })

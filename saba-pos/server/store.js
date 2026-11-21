@@ -306,6 +306,9 @@ export function createMenuItem(input) {
     course: input.course,
     pricePaise: Math.max(0, Math.round(Number(input.pricePaise) || 0)),
     costPaise: Math.max(0, Math.round(Number(input.costPaise) || 0)),
+    halfPricePaise: Number(input.halfPricePaise) > 0
+      ? Math.round(Number(input.halfPricePaise))
+      : null,
     description: String(input.description || '').slice(0, 240),
     diet: input.diet === 'NON_VEG' ? 'NON_VEG' : 'VEG',
     allergens: Array.isArray(input.allergens) ? input.allergens.slice(0, 8) : [],
@@ -497,7 +500,8 @@ export function mergeTables(sourceId, targetId, user) {
 
 /* --------------------------------------------------------------- lines --- */
 
-export function addOrderLine(orderId, { itemId, qty, seat, course, modifierIds, notes }, user) {
+export function addOrderLine(orderId,
+  { itemId, qty, seat, course, modifierIds, notes, portion }, user) {
   const item = menuItem(itemId);
   if (!item) throw notFound('No such dish');
   if (!item.available) throw conflict(`${item.name} is 86 tonight`);
@@ -510,6 +514,7 @@ export function addOrderLine(orderId, { itemId, qty, seat, course, modifierIds, 
       seat: seat ? Math.max(1, Math.min(40, Number(seat))) : null,
       course: course || item.course,
       modifiers: chosen,
+      portion: portion === 'HALF' ? 'HALF' : 'FULL',
       notes: String(notes || '').slice(0, 240),
     });
   }).order;
@@ -577,6 +582,64 @@ export function toggleComp(orderId, lineId, { reason, approver }) {
       { actor: approver.name, meta: { orderId, lineId } });
   });
   return order;
+}
+
+/**
+ * Move one dish to another table.
+ *
+ * For the thing that happens in every dining room: the lamb goes to six when
+ * it was ordered on four. The guests have it, nobody wants it back, and the
+ * only question left is whose bill it lands on.
+ *
+ * The money moves with the dish. What does not move is the docket it was
+ * cooked on: that ticket was printed for table four and the kitchen made it
+ * for table four, and rewriting history to tidy up a mistake would make the
+ * audit trail a worse record than the mistake. The line keeps its timings
+ * and its kot id, carries a note saying where it came from, and both bills
+ * say what happened.
+ *
+ * Seat numbers are dropped, because seat 2 on another table is somebody else.
+ */
+export function moveLineToOrder(fromOrderId, lineId, toOrderId, { approver }) {
+  if (fromOrderId === toOrderId) throw new HttpError(400, 'That is the same table');
+
+  return tx(() => {
+    const from = getOrder(fromOrderId);
+    const to = getOrder(toOrderId);
+    if (!from || from.status !== 'OPEN') throw notFound('That table is no longer open');
+    if (!to || to.status !== 'OPEN') throw notFound('The other table is no longer open');
+    if (to.invoice) throw conflict(`Table ${to.tableLabel} has already been billed`);
+
+    if (from.invoice) {
+      throw conflict(
+        `Table ${from.tableLabel} has already been billed as ${from.invoice.code}.`
+        + ' Moving a dish off a printed bill would change a total the guest has'
+        + ' already been shown — void the line and add it to the other table.'
+      );
+    }
+
+    const line = from.lines.find((l) => l.id === lineId);
+    if (!line) throw notFound('No such line');
+    if (line.status === 'VOID') throw conflict('That line is already void');
+
+    from.lines = from.lines.filter((l) => l.id !== lineId);
+    to.lines.push({
+      ...line,
+      seat: null,
+      movedFrom: from.tableLabel,
+      movedAt: Date.now(),
+      movedBy: approver.name,
+    });
+
+    persist(from);
+    persist(to);
+
+    const what = `${line.qty} × ${line.name}`;
+    audit('MOVE', `${what} moved from Table ${from.tableLabel} to Table ${to.tableLabel}`,
+      { actor: approver.name, meta: { lineId, from: fromOrderId, to: toOrderId } });
+    bumpRevision();
+    return { from, to };
+  });
 }
 
 export function updateOrderDetails(orderId, { covers, guestName, notes }) {
@@ -717,6 +780,14 @@ export function addPayment(orderId, { method, paise, ref, shareId }, user) {
       at: Date.now(),
       by: user.name,
     });
+
+    // Every tender, named, with who took it. Only cash counts to the drawer,
+    // so a cash payment entered as UPI is cash nobody expects to find — and
+    // without this line there was nothing to find it by.
+    audit('PAYMENT',
+      `${method} ${(amount / 100).toFixed(2)} taken on Table ${order.tableLabel}`
+      + (ref ? ` — ref ${String(ref).slice(0, 60)}` : ''),
+      { actor: user.name, meta: { orderId, method, paise: amount } });
   }).order;
 }
 
@@ -859,6 +930,65 @@ export function workingSet() {
       invoice: one("SELECT value FROM counters WHERE name = 'invoice'")?.value ?? 0,
     },
   };
+}
+
+/* ---------------------------------------------------------- attendance --- */
+
+/**
+ * Who is on the premises right now, per person.
+ *
+ * A spell that has no clock_out is still running. There can only be one of
+ * those at a time for anybody, which is what stops a second tap of Clock in
+ * opening a second spell and billing the restaurant for two of them.
+ */
+export const openSpell = (userId) =>
+  one('SELECT * FROM attendance WHERE user_id = ? AND clock_out IS NULL'
+    + ' ORDER BY clock_in DESC LIMIT 1', userId) || null;
+
+export const attendanceOn = (day = today(), userId = null) =>
+  (userId
+    ? all('SELECT * FROM attendance WHERE day = ? AND user_id = ? ORDER BY clock_in', day, userId)
+    : all('SELECT * FROM attendance WHERE day = ? ORDER BY clock_in', day))
+    .map(withMinutes);
+
+/** Minutes are derived, never stored: see the note on the table. */
+const withMinutes = (row) => ({
+  ...row,
+  open: row.clock_out === null,
+  minutes: Math.max(0, Math.round(((row.clock_out ?? Date.now()) - row.clock_in) / 60000)),
+});
+
+export function clockIn(user) {
+  return tx(() => {
+    if (openSpell(user.id)) throw conflict(`${user.name} is already clocked in`);
+    const id = `at_${randomUUID().slice(0, 12)}`;
+    const now = Date.now();
+    run(
+      'INSERT INTO attendance (id, user_id, user_name, role, day, clock_in, updated_at)'
+      + ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+      id, user.id, user.name, user.role, today(), now, now
+    );
+    audit('ATTENDANCE', `${user.name} clocked in`, { actor: user.name });
+    bumpRevision();
+    return withMinutes(one('SELECT * FROM attendance WHERE id = ?', id));
+  });
+}
+
+export function clockOut(user, { note = '' } = {}) {
+  return tx(() => {
+    const spell = openSpell(user.id);
+    if (!spell) throw conflict(`${user.name} is not clocked in`);
+    const now = Date.now();
+    run('UPDATE attendance SET clock_out = ?, note = ?, updated_at = ? WHERE id = ?',
+      now, String(note).slice(0, 120), now, spell.id);
+
+    const minutes = Math.round((now - spell.clock_in) / 60000);
+    audit('ATTENDANCE',
+      `${user.name} clocked out — ${Math.floor(minutes / 60)}h ${minutes % 60}m`,
+      { actor: user.name });
+    bumpRevision();
+    return withMinutes(one('SELECT * FROM attendance WHERE id = ?', spell.id));
+  });
 }
 
 /* -------------------------------------------------------------- shifts --- */

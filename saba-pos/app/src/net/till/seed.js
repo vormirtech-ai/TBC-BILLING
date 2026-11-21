@@ -15,9 +15,10 @@ import * as till from './store.js';
 
 /** Who can sign in to the demonstration, and the PIN shown beside each. */
 export const DEMO_STAFF = [
-  { name: 'Manager', role: 'manager', pin: '1379' },
+  { name: 'Owner', role: 'admin', pin: '1379' },
+  { name: 'Devesh Kamat', role: 'manager', pin: '3582' },
   { name: 'Alina Rahman', role: 'captain', pin: '2471' },
-  { name: 'Devesh Kamat', role: 'cashier', pin: '3582' },
+  { name: 'Priya Nair', role: 'waiter', pin: '5814' },
   { name: 'Kitchen Pass', role: 'kitchen', pin: '4693' },
 ];
 
@@ -39,7 +40,7 @@ export function seedDemo() {
   const by = (role) => till.db.users.find((u) => u.role === role);
   const example = buildWorkedExample({
     today: till.today(),
-    users: { manager: by('manager'), captain: by('captain'), cashier: by('cashier') },
+    users: { manager: by('admin'), captain: by('captain'), cashier: by('manager') },
     uid: () => `pay_${Math.random().toString(36).slice(2, 14)}`,
   });
 

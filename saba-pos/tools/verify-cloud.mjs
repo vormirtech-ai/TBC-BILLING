@@ -83,6 +83,8 @@ const COLUMN_TYPES = {
   settings: 'key text, value jsonb, updated_at bigint',
   users: 'id text, name text, initials text, role text, active boolean,'
     + ' created_at bigint, updated_at bigint',
+  attendance: 'id text, user_id text, user_name text, role text, day text,'
+    + ' clock_in bigint, clock_out bigint, note text, updated_at bigint',
 };
 const DATE_COLUMNS = new Set(['business_day', 'day']);
 
@@ -159,7 +161,7 @@ check('items sold are counted',
 
 check('the health view covers every synced table',
   query('select count(*) from public.v_sync_health;'),
-  6);
+  7);
 
 // A table with no rows yet is not a fault — no shift is open in the worked
 // example — but one that has rows must say when it last heard from the till.

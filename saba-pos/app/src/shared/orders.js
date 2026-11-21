@@ -57,7 +57,14 @@ export function createOrder({ number, table, covers, guestName, user, reservatio
   };
 }
 
-export function createLine(item, { qty = 1, course, seat = null, modifiers = [], notes = '' } = {}) {
+export function createLine(item, {
+  qty = 1, course, seat = null, modifiers = [], notes = '', portion = 'FULL',
+} = {}) {
+  // A half plate only exists where the dish is priced for one. Asking for a
+  // half of something that has no half price gets a full plate at the full
+  // price, which is what the kitchen would have sent anyway.
+  const half = portion === 'HALF' && item.halfPricePaise > 0;
+
   return {
     id: uid('ln'),
     itemId: item.id,
@@ -66,7 +73,8 @@ export function createLine(item, { qty = 1, course, seat = null, modifiers = [],
     course: course || item.course,
     seat,
     qty: Math.max(1, Number(qty) || 1),
-    unitPaise: item.pricePaise,
+    portion: half ? 'HALF' : 'FULL',
+    unitPaise: half ? item.halfPricePaise : item.pricePaise,
     modifiers: modifiers.map((m) => ({ id: m.id, label: m.label, deltaPaise: m.deltaPaise || 0 })),
     notes,
     status: KOT_STATUS.HELD,
@@ -97,6 +105,7 @@ export function addLine(order, item, options = {}) {
       && l.itemId === candidate.itemId
       && l.course === candidate.course
       && l.seat === candidate.seat
+      && l.portion === candidate.portion
       && l.notes === candidate.notes
       && sameModifiers(l.modifiers, candidate.modifiers)
   );
@@ -351,3 +360,13 @@ export const orderValue = (order) =>
     .reduce((total, l) => total + lineGross(l), 0);
 
 export const courseLabel = (id) => courseById(id).label;
+
+/**
+ * The dish as it should be read out.
+ *
+ * A half plate has to say so everywhere it appears — on the docket the cook
+ * works from, on the bill the guest checks, and on both screens — or
+ * somebody plates the wrong thing and somebody else argues about the price.
+ */
+export const lineName = (line) =>
+  (line.portion === 'HALF' ? `${line.name} (half)` : line.name);

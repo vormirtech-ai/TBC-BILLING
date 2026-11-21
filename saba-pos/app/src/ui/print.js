@@ -13,7 +13,7 @@ import { clockTime, longDate, pad, stamp } from '../shared/format.js';
 import { ASSETS, RESTAURANT, COURSES, stationById, courseById, paymentLabel, KOT_STATUS } from '../shared/config.js';
 import { charges } from '../shared/pricing.js';
 import { lineUnit, lineGross } from '../shared/pricing.js';
-import { kotLines } from '../shared/orders.js';
+import { kotLines, lineName } from '../shared/orders.js';
 
 const LOGO = ASSETS.logo;
 const cash = (paise) => money(paise, RESTAURANT.currency, RESTAURANT.locale);
@@ -135,7 +135,7 @@ function billRows(order, lines, opts) {
 
       rows.push(h(`tr${voided ? '.doc__void' : ''}`, {}, [
         h('td', {}, [
-          h('div', { text: line.name }),
+          h('div', { text: lineName(line) }),
           detail ? h('div.doc__sub', { text: detail }) : null,
         ]),
         h('td.qty.num', { text: String(line.qty) }),
@@ -249,7 +249,7 @@ export function renderKot(order, kot, opts = {}) {
       ...group.items.map((line) => h('div.kot__line', {}, [
         h('div.kot__qty', { text: String(line.qty) }),
         h('div', { style: { flex: '1' } }, [
-          h('div.kot__name', { text: line.name }),
+          h('div.kot__name', { text: lineName(line) }),
           line.seat ? h('div.kot__seat', { text: `SEAT ${line.seat}` }) : null,
           line.modifiers.length
             ? h('div.kot__mods', { text: line.modifiers.map((m) => m.label).join(' · ') })

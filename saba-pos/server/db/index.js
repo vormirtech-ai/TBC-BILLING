@@ -20,7 +20,7 @@ import { log } from '../log.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when schema.sql changes in a way an existing database needs told about. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 let db = null;
 
@@ -106,6 +106,20 @@ function migrate(handle) {
         handle.exec('ALTER TABLE reservations ADD COLUMN deleted_at INTEGER');
       }
     },
+
+    // 3: the roles became admin / manager / captain / waiter / kitchen, with
+    //    the takings reserved to admin. Whoever ran this till keeps full
+    //    access — demoting the only person who can open Setup would lock the
+    //    restaurant out of its own system — and a cashier becomes a manager,
+    //    which is the same job minus the reports.
+    3: (handle) => {
+      handle.exec("UPDATE users SET role = 'admin' WHERE role = 'manager'");
+      handle.exec("UPDATE users SET role = 'manager' WHERE role = 'cashier'");
+    },
+
+    // 4: attendance. The table itself is created by schema.sql; this step
+    //    exists so an older database is carried to the new version number.
+    4: () => {},
   };
 
   while (version < SCHEMA_VERSION) {

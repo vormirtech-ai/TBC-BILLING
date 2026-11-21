@@ -37,6 +37,21 @@ import { TABLES, pushed, pulled, toRemote, toLocal } from './tables.js';
 /** Rows per request. Large enough to be few trips, small enough to retry cheaply. */
 const BATCH = 200;
 
+/**
+ * How soon to try again after a pass that could not reach the cloud.
+ *
+ * A restaurant's line comes back at no particular moment and nothing tells
+ * us when, so the only honest answer is to ask again soon. One minute,
+ * doubling to five, which means a line back at 14:01 is caught by 14:02
+ * rather than at the next scheduled pass ten minutes later.
+ *
+ * Only for failures worth retrying. A wrong key or a missing table will
+ * still be wrong in a minute, so those wait for the ordinary interval
+ * instead of hammering a project that is answering perfectly well.
+ */
+const RETRY_MIN = 60_000;
+const RETRY_MAX = 5 * 60_000;
+
 const state = {
   running: false,
   timer: null,
@@ -284,15 +299,26 @@ export function start() {
 
   const every = Math.max(1, config.syncMinutes) * 60_000;
 
-  const tick = () => {
-    runOnce({ reason: 'scheduled' }).catch(() => { /* already recorded */ });
+  /** When to come back, given how the last pass went. */
+  const nextDelay = (result) => {
+    if (result?.ok || !state.lastError?.retryable) return every;
+    const backoff = RETRY_MIN * 2 ** Math.min(4, state.consecutiveFailures - 1);
+    return Math.min(RETRY_MAX, Math.max(RETRY_MIN, backoff));
   };
 
-  setTimeout(tick, 60_000).unref();
-  state.timer = setInterval(tick, every).unref();
+  // A self-rescheduling timer rather than setInterval, so the gap can shrink
+  // when the line is down and go back to normal when it returns.
+  const tick = async () => {
+    const result = await runOnce({ reason: 'scheduled' }).catch(() => null);
+    if (!state.timer) return;                      // stopped while we were away
+    state.timer = setTimeout(tick, nextDelay(result)).unref();
+  };
+
+  state.timer = setTimeout(tick, 60_000).unref();
 
   log.info('cloud sync is on', {
     every: `${config.syncMinutes}m`,
+    retry: `${RETRY_MIN / 1000}s while offline`,
     project: hostOf(config.supabaseUrl),
   });
   return state.timer;
@@ -300,7 +326,7 @@ export function start() {
 
 export function stop() {
   if (state.timer) {
-    clearInterval(state.timer);
+    clearTimeout(state.timer);
     state.timer = null;
   }
 }

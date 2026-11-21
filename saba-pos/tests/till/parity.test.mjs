@@ -62,7 +62,7 @@ async function realTill() {
   };
 
   const roster = await call('GET', '/api/session/staff');
-  const manager = roster.json.staff.find((p) => p.name === 'Manager');
+  const manager = roster.json.staff.find((p) => p.name === 'Owner');
   await call('POST', '/api/session', { userId: manager.id, pin: '7391' });
 
   return {
@@ -85,7 +85,7 @@ async function browserTill() {
   tillStore.db.counters = { order: 0, invoice: 0 };
   tillStore.db.session = tillStore.db.users
     .map((u) => ({ id: u.id, name: u.name, role: u.role, initials: u.initials, active: true }))
-    .find((u) => u.role === 'manager');
+    .find((u) => u.role === 'admin');
 
   const call = async (method, path, body) => {
     const res = handle(path, {
@@ -216,9 +216,9 @@ test('the demonstration bills a table exactly as the product does', async (t) =>
 test('the worked example is the same restaurant on both', async (t) => {
   const today = '2026-03-14';
   const users = {
-    manager: { id: 'u_m', name: 'Manager', role: 'manager' },
+    manager: { id: 'u_m', name: 'Owner', role: 'admin' },
     captain: { id: 'u_c', name: 'Alina Rahman', role: 'captain' },
-    cashier: { id: 'u_x', name: 'Devesh Kamat', role: 'cashier' },
+    cashier: { id: 'u_x', name: 'Devesh Kamat', role: 'manager' },
   };
 
   // The generator is shared, so building it twice must produce one restaurant.
@@ -304,10 +304,18 @@ test('a role cannot reach past its screens in the demonstration either', async (
   t.equal((await browser.call('GET', '/api/reports')).status, 403,
     'a captain does not see the takings');
 
-  asRole('cashier');
-  t.equal((await browser.call('GET', '/api/reports')).status, 200, 'a cashier reads reports');
-  t.equal((await browser.call('POST', '/api/users', { name: 'X', role: 'manager', pin: '1928' })).status,
-    403, 'but cannot create a manager');
+  asRole('manager');
+  t.equal((await browser.call('GET', '/api/reports')).status, 403,
+    'a manager does not see the takings either');
+  t.equal((await browser.call('POST', '/api/users', { name: 'X', role: 'admin', pin: '1928' })).status,
+    403, 'nor make anybody an admin');
+
+  asRole('waiter');
+  t.equal((await browser.call('GET', '/api/state')).status, 200, 'a waiter works the floor');
+  t.equal((await browser.call('GET', '/api/reports')).status, 403, 'and never the takings');
+
+  asRole('admin');
+  t.equal((await browser.call('GET', '/api/reports')).status, 200, 'only the owner reads them');
 
   await browser.stop();
 });

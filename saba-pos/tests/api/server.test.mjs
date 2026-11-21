@@ -108,7 +108,7 @@ async function withServer(options, fn) {
  * every member of staff's — the difference between an instant sign-in and a
  * two-second wait at the start of every shift.
  */
-async function signIn(call, pin, name = 'Manager') {
+async function signIn(call, pin, name = 'Owner') {
   const roster = await call('GET', '/api/session/staff');
   const person = (roster.json?.staff || []).find((p) => p.name === name);
   return call('POST', '/api/session', { userId: person?.id, pin });
@@ -153,11 +153,11 @@ test('signing in with the right PIN works, and a wrong one does not', async (t) 
 
     const good = await signIn(call, server.setupPin);
     t.equal(good.status, 200);
-    t.equal(good.json.user.role, 'manager');
+    t.equal(good.json.user.role, 'admin');
 
     const who = await call('GET', '/api/session');
     t.equal(who.status, 200);
-    t.equal(who.json.user.role, 'manager');
+    t.equal(who.json.user.role, 'admin');
   });
 });
 
@@ -340,6 +340,71 @@ test('a tariff that would be a typo is refused', async (t) => {
   });
 });
 
+test('a half plate is its own price, and says so on the bill', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+
+    const state = (await call('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.halfPricePaise > 0);
+    t.ok(dish, 'the carte has a dish that comes as a half');
+    t.ok(dish.halfPricePaise < dish.pricePaise, 'and a half costs less than a full');
+
+    const { id } = (await call('POST', '/api/tables/t1/seat', { covers: 2 })).json.order;
+
+    await call('POST', `/api/orders/${id}/lines`,
+      { itemId: dish.id, qty: 1, portion: 'HALF' });
+    await call('POST', `/api/orders/${id}/lines`,
+      { itemId: dish.id, qty: 1, portion: 'FULL' });
+
+    const order = (await call('GET', `/api/orders/${id}`)).json.order;
+    t.equal(order.lines.length, 2, 'a half and a full are not the same line');
+
+    const half = order.lines.find((l) => l.portion === 'HALF');
+    const full = order.lines.find((l) => l.portion === 'FULL');
+    t.equal(half.unitPaise, dish.halfPricePaise, 'the half is charged at the half price');
+    t.equal(full.unitPaise, dish.pricePaise, 'and the full at the full one');
+
+    // Two halves are one line of two, so a docket does not list them twice.
+    await call('POST', `/api/orders/${id}/lines`,
+      { itemId: dish.id, qty: 1, portion: 'HALF' });
+    const after = (await call('GET', `/api/orders/${id}`)).json.order;
+    t.equal(after.lines.length, 2, 'a second half joins the first');
+    t.equal(after.lines.find((l) => l.portion === 'HALF').qty, 2);
+
+    const totals = (await call('GET', `/api/orders/${id}`)).json.totals;
+    t.equal(totals.gross, dish.halfPricePaise * 2 + dish.pricePaise,
+      'and the bill adds up to the prices actually charged');
+
+    // Asking for a half of something that has no half price is a full plate,
+    // not a free discount.
+    const plain = state.menu.find((i) => i.available && !i.halfPricePaise);
+    await call('POST', `/api/orders/${id}/lines`,
+      { itemId: plain.id, qty: 1, portion: 'HALF' });
+    const line = (await call('GET', `/api/orders/${id}`)).json.order.lines
+      .find((l) => l.itemId === plain.id);
+    t.equal(line.portion, 'FULL', 'it falls back to a full plate');
+    t.equal(line.unitPaise, plain.pricePaise, 'at the full price');
+  });
+});
+
+test('an owner can put a dish on as a half, or take the half off', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+
+    const made = await call('POST', '/api/menu', {
+      name: 'Dal Makhani', category: 'mains', station: 'HOT', course: 'MAIN',
+      pricePaise: 42000, halfPricePaise: 26000,
+    });
+    t.equal(made.status, 201);
+    t.equal(made.json.item.halfPricePaise, 26000, 'it goes on with a half price');
+
+    const off = await call('PATCH', `/api/menu/${made.json.item.id}`,
+      { halfPricePaise: null });
+    t.equal(off.status, 200);
+    t.equal(off.json.item.halfPricePaise, null, 'and the half can be taken away');
+  });
+});
+
 test('quantities are clamped to something a kitchen could cook', async (t) => {
   await withServer({}, async (server, call) => {
     await signIn(call, server.setupPin);
@@ -470,12 +535,12 @@ test('a void needs a manager PIN and a reason, and both are recorded', async (t)
     const voided = done.json.order.lines.find((l) => l.id === lineId);
     t.equal(voided.status, 'VOID');
     t.equal(voided.voidReason, 'Guest changed order');
-    t.equal(voided.voidBy, 'Manager', 'the approver is named, not the person who asked');
+    t.equal(voided.voidBy, 'Owner', 'the approver is named, not the person who asked');
 
     const audit = (await call('GET', '/api/audit')).json.entries;
     const entry = audit.find((a) => a.kind === 'VOID');
     t.ok(entry, 'the void is in the audit log');
-    t.equal(entry.actor, 'Manager');
+    t.equal(entry.actor, 'Owner');
   });
 });
 
@@ -588,6 +653,80 @@ test('a floor plan that makes no sense is refused', async (t) => {
   });
 });
 
+/* ----------------------------------------------------------- the money --- */
+
+test('every tender is recorded, so cash entered as UPI leaves a trail', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+    const state = (await call('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.available);
+    const { id } = (await call('POST', '/api/tables/t1/seat', { covers: 2 })).json.order;
+    await call('POST', `/api/orders/${id}/lines`, { itemId: dish.id, qty: 1 });
+
+    await call('POST', `/api/orders/${id}/payments`,
+      { method: 'UPI', paise: 50000, ref: 'ref 884213' });
+
+    const entries = (await call('GET', '/api/audit')).json.entries;
+    const taken = entries.find((e) => e.kind === 'PAYMENT');
+    t.ok(taken, 'the payment is in the audit trail');
+    t.ok(taken.message.includes('UPI'), 'naming the tender it was taken as');
+    t.ok(taken.message.includes('500.00'), 'and the amount');
+    t.ok(taken.message.includes('884213'), 'and the reference');
+    t.equal(taken.actor, 'Owner', 'and who took it');
+
+    // Removing it is recorded too, so taking a payment and quietly dropping
+    // it is two entries rather than none.
+    const order = (await call('GET', `/api/orders/${id}`)).json.order;
+    await call('DELETE', `/api/orders/${id}/payments/${order.payments[0].id}`);
+    const after = (await call('GET', '/api/audit')).json.entries
+      .filter((e) => e.kind === 'PAYMENT');
+    t.equal(after.length, 2, 'both the taking and the removing are on the record');
+  });
+});
+
+test('a dish goes to the right table, and not off a printed bill', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+    const state = (await call('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.available);
+
+    const four = (await call('POST', '/api/tables/t4/seat', { covers: 2 })).json.order;
+    const six = (await call('POST', '/api/tables/t6/seat', { covers: 2 })).json.order;
+    await call('POST', `/api/orders/${four.id}/lines`, { itemId: dish.id, qty: 2 });
+    const line = (await call('GET', `/api/orders/${four.id}`)).json.order.lines[0];
+
+    // A captain cannot do this: it moves money between two guests' bills.
+    await call('POST', '/api/users', { name: 'Cap', role: 'captain', pin: '8372' });
+    const captain = client(server.base);
+    await signIn(captain, '8372', 'Cap');
+    t.equal((await captain('POST', `/api/orders/${four.id}/lines/${line.id}/move`,
+      { toOrderId: six.id, approverPin: '8372' })).status, 403,
+    'a captain cannot move a dish between tables');
+
+    const moved = await call('POST', `/api/orders/${four.id}/lines/${line.id}/move`,
+      { toOrderId: six.id, approverPin: server.setupPin });
+    t.equal(moved.status, 200, 'a manager can');
+
+    const from = (await call('GET', `/api/orders/${four.id}`)).json;
+    const to = (await call('GET', `/api/orders/${six.id}`)).json;
+    t.equal(from.order.lines.length, 0, 'it has left the first bill');
+    t.equal(to.order.lines.length, 1, 'and joined the second');
+    t.equal(to.order.lines[0].movedFrom, '4', 'saying where it came from');
+    t.equal(to.totals.gross, dish.pricePaise * 2, 'the money went with it');
+
+    const entry = (await call('GET', '/api/audit')).json.entries
+      .find((e) => e.kind === 'MOVE');
+    t.ok(entry, 'and it is on the record');
+
+    // Once the guest has a printed bill, the total they were shown stands.
+    await call('POST', `/api/orders/${six.id}/invoice`);
+    const after = await call('POST', `/api/orders/${six.id}/lines/${to.order.lines[0].id}/move`,
+      { toOrderId: four.id, approverPin: server.setupPin });
+    t.equal(after.status, 409, 'a dish cannot be moved off a printed bill');
+    t.ok(/already been billed/.test(after.json.error), after.json.error);
+  });
+});
+
 /* ---------------------------------------------------------------- roles --- */
 
 test('each role can reach exactly what it should', async (t) => {
@@ -595,7 +734,8 @@ test('each role can reach exactly what it should', async (t) => {
     await signIn(call, server.setupPin);
     await call('POST', '/api/users', { name: 'Kitchen', role: 'kitchen', pin: '8261' });
     await call('POST', '/api/users', { name: 'Captain', role: 'captain', pin: '8372' });
-    await call('POST', '/api/users', { name: 'Cashier', role: 'cashier', pin: '8483' });
+    await call('POST', '/api/users', { name: 'Boss', role: 'manager', pin: '8483' });
+    await call('POST', '/api/users', { name: 'Waiter', role: 'waiter', pin: '8705' });
 
     const kitchen = client(server.base);
     await signIn(kitchen, '8261', 'Kitchen');
@@ -604,48 +744,69 @@ test('each role can reach exactly what it should', async (t) => {
       'the kitchen cannot seat a table');
     t.equal((await kitchen('GET', '/api/users')).status, 403,
       'the kitchen cannot manage staff');
-    t.equal((await kitchen('POST', '/api/backup')).status, 403,
-      'the kitchen cannot take a backup');
     t.equal((await kitchen('GET', '/api/reports')).status, 403,
       'the kitchen cannot read the takings');
+
+    const waiter = client(server.base);
+    await signIn(waiter, '8705', 'Waiter');
+    t.equal((await waiter('POST', '/api/tables/t7/seat', { covers: 2 })).status, 200,
+      'a waiter seats tables and takes orders');
+    t.equal((await waiter('GET', '/api/attendance')).status, 200,
+      'and can mark their own attendance');
+    t.equal((await waiter('GET', '/api/reports')).status, 403,
+      'but never sees the takings');
+    t.equal((await waiter('GET', '/api/users')).status, 403);
 
     const captain = client(server.base);
     await signIn(captain, '8372', 'Captain');
     t.equal((await captain('POST', '/api/tables/t9/seat', { covers: 2 })).status, 200,
       'a captain seats tables');
+    t.equal((await captain('GET', '/api/attendance')).status, 200);
     t.equal((await captain('GET', '/api/reports')).status, 403,
       'a captain does not see the takings');
     t.equal((await captain('GET', '/api/users')).status, 403);
 
-    const cashier = client(server.base);
-    await signIn(cashier, '8483', 'Cashier');
-    t.equal((await cashier('GET', '/api/reports')).status, 200, 'a cashier reads reports');
-    t.equal((await cashier('GET', '/api/export/sales.csv')).status, 200,
-      'and can export them');
-    t.equal((await cashier('POST', '/api/users', { name: 'X', role: 'manager', pin: '1928' })).status,
-      403, 'but cannot create a manager');
+    // A manager runs the service. The money is still the owner's business.
+    const manager = client(server.base);
+    await signIn(manager, '8483', 'Boss');
+    t.equal((await manager('GET', '/api/state')).status, 200);
+    t.equal((await manager('GET', '/api/attendance')).status, 200);
+    t.equal((await manager('GET', '/api/reports')).status, 403,
+      'a manager does not see the takings either — reports are the owner\u2019s');
+    t.equal((await manager('GET', '/api/export/sales.csv')).status, 403,
+      'nor export them');
+    t.equal((await manager('POST', '/api/users', { name: 'X', role: 'admin', pin: '1928' })).status,
+      403, 'and cannot make somebody an admin');
+    t.equal((await manager('POST', '/api/backup')).status, 403,
+      'nor take the database away');
+
+    // Only the owner.
+    t.equal((await call('GET', '/api/reports')).status, 200, 'the admin reads the takings');
+    t.equal((await call('GET', '/api/export/sales.csv')).status, 200, 'and exports them');
+    t.equal((await call('GET', '/api/attendance?all=1')).status, 200,
+      'and sees everybody\u2019s attendance, not just their own');
   });
 });
 
-test('a cashier cannot promote themselves by editing their own account', async (t) => {
+test('a waiter cannot promote themselves by editing their own account', async (t) => {
   await withServer({}, async (server, call) => {
     await signIn(call, server.setupPin);
-    const made = await call('POST', '/api/users', { name: 'Cash', role: 'cashier', pin: '8594' });
-    const cashierId = made.json.user.id;
+    const made = await call('POST', '/api/users', { name: 'Cash', role: 'waiter', pin: '8594' });
+    const waiterId = made.json.user.id;
 
-    const cashier = client(server.base);
-    await signIn(cashier, '8594', 'Cash');
-    const attempt = await cashier('PATCH', `/api/users/${cashierId}`, { role: 'manager' });
+    const waiter = client(server.base);
+    await signIn(waiter, '8594', 'Cash');
+    const attempt = await waiter('PATCH', `/api/users/${waiterId}`, { role: 'admin' });
     t.equal(attempt.status, 403);
   });
 });
 
-test('the last manager cannot be demoted or switched off', async (t) => {
+test('the last admin cannot be demoted or switched off', async (t) => {
   await withServer({}, async (server, call) => {
     await signIn(call, server.setupPin);
     const me = (await call('GET', '/api/session')).json.user;
 
-    const demote = await call('PATCH', `/api/users/${me.id}`, { role: 'cashier' });
+    const demote = await call('PATCH', `/api/users/${me.id}`, { role: 'manager' });
     t.equal(demote.status, 409, 'that would lock everybody out of Setup');
 
     const disable = await call('PATCH', `/api/users/${me.id}`, { active: false });
@@ -806,7 +967,7 @@ test('two terminals settling the same table at once produce one bill', async (t)
     const totals = (await call('GET', `/api/orders/${id}`)).json.totals;
     await call('POST', `/api/orders/${id}/payments`, { method: 'CASH', paise: totals.total });
 
-    // Two cashiers hitting Close at the same moment.
+    // Two terminals hitting Close at the same moment.
     const a = client(server.base);
     const b = client(server.base);
     await signIn(a, server.setupPin);
@@ -897,7 +1058,7 @@ test('a terminal is told the revision over the event stream', async (t) => {
 /** Sign in on a bare fetch so the raw cookie is available for the stream. */
 async function cookieFor(server, call) {
   const roster = await call('GET', '/api/session/staff');
-  const manager = roster.json.staff.find((p) => p.name === 'Manager');
+  const manager = roster.json.staff.find((p) => p.name === 'Owner');
   const res = await fetch(`${server.base}/api/session`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

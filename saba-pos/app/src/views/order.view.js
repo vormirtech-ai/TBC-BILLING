@@ -28,7 +28,7 @@ import { CATEGORIES } from '../shared/catalogue.js';
 import { money } from '../shared/money.js';
 import { elapsed, matches, plural } from '../shared/format.js';
 import { costOrder, lineGross } from '../shared/pricing.js';
-import { coursePacing, heldLines, heldCourses, seatsUsed } from '../shared/orders.js';
+import { coursePacing, heldLines, heldCourses, seatsUsed, lineName } from '../shared/orders.js';
 import {
   menu, modifierGroups, orderForTable, orderById, addItem, changeQty, dropLine,
   killLine, toggleComp, fire, updateOrder, can, markReprint, setEightySix,
@@ -203,7 +203,7 @@ function renderDishes(order) {
  * would add a tap to the ninety per cent of orders that need no choices.
  */
 function pickDish(order, item) {
-  if (!item.modifierGroups?.length) {
+  if (!item.modifierGroups?.length && !item.halfPricePaise) {
     addItem(order.id, item, { qty: 1, seat: ui.seat || null, course: item.course })
       .then(() => toast(`${item.name} added${ui.seat ? ` · seat ${ui.seat}` : ''}`, 'good', 1600))
       .catch(failed);
@@ -220,6 +220,30 @@ function openModifiers(order, item) {
 
   const note = h('input.input', { placeholder: 'Anything the kitchen must know…' });
   const qtyValue = h('span.stepper__value', { text: '1' });
+  let portion = 'FULL';
+
+  // Half or full, where the dish is priced for both. The price is on the
+  // button, because a captain asked "how much is a half?" at the table is
+  // not going to go and look it up.
+  const portionField = item.halfPricePaise
+    ? h('div.field', {}, [
+      h('label.field__label', { text: 'Portion' }),
+      h('div.u-row.u-wrap', { style: { gap: '7px' } }, [
+        ['FULL', 'Full', item.pricePaise],
+        ['HALF', 'Half', item.halfPricePaise],
+      ].map(([id, label, paise]) =>
+        h('button.btn.btn--outline.btn--sm', {
+          type: 'button',
+          class: id === portion ? 'btn--primary' : '',
+          onclick: (event) => {
+            portion = id;
+            for (const sibling of event.currentTarget.parentElement.children) {
+              sibling.classList.toggle('btn--primary', sibling === event.currentTarget);
+            }
+          },
+        }, [label, h('span.u-muted', { text: ` ${money(paise)}` })]))),
+    ])
+    : null;
 
   const fields = (item.modifierGroups || []).map((groupId) => {
     const group = groups[groupId];
@@ -262,6 +286,7 @@ function openModifiers(order, item) {
     subtitle: item.description
       || `${stationById(item.station).label} · ${money(item.pricePaise)}`,
     body: h('div.grid', { style: { gap: '16px' } }, [
+      portionField,
       ...fields,
       h('div.field', {}, [
         h('label.field__label', { text: 'Course' }),
@@ -308,9 +333,12 @@ function openModifiers(order, item) {
             (groups[groupId]?.options || []).filter((o) => set.has(o.id)));
           close();
           addItem(order.id, item, {
-            qty, seat: ui.seat || null, course, modifiers, notes: note.value.trim(),
+            qty, seat: ui.seat || null, course, modifiers, portion,
+            notes: note.value.trim(),
           })
-            .then(() => toast(`${qty} × ${item.name} added`, 'good', 1600))
+            .then(() => toast(
+              `${qty} × ${item.name}${portion === 'HALF' ? ' (half)' : ''} added`,
+              'good', 1600))
             .catch(failed);
         },
       },
@@ -443,7 +471,7 @@ function renderLine(order, line) {
     h('span.ln__qty', { text: String(line.qty) }),
 
     h('div', {}, [
-      h('div.ln__name', { text: line.name }),
+      h('div.ln__name', { text: lineName(line) }),
       line.modifiers.length
         ? h('div.ln__mods', { text: line.modifiers.map((m) => m.label).join(' · ') })
         : null,

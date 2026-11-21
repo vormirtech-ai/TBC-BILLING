@@ -79,8 +79,8 @@ export const listAllUsers = () =>
 
 export const getUser = (id) => publicUser(one('SELECT * FROM users WHERE id = ?', id));
 
-export const countManagers = () =>
-  one("SELECT count(*) AS n FROM users WHERE active = 1 AND role = 'manager'").n;
+export const countAdmins = () =>
+  one("SELECT count(*) AS n FROM users WHERE active = 1 AND role = 'admin'").n;
 
 export function initials(name) {
   return String(name || '').trim().split(/\s+/).slice(0, 2)
@@ -121,10 +121,10 @@ export function updateUser(id, { name, role, pin, active }) {
 
     // Never let the last manager be demoted or switched off: that locks
     // everybody out of Setup with no way back in.
-    const losingManager = row.role === 'manager' && row.active
-      && ((role && role !== 'manager') || active === false);
-    if (losingManager && countManagers() <= 1) {
-      throw new HttpError(409, 'This is the only manager — promote someone else first');
+    const losingAdmin = row.role === 'admin' && row.active
+      && ((role && role !== 'admin') || active === false);
+    if (losingAdmin && countAdmins() <= 1) {
+      throw new HttpError(409, 'This is the only admin — promote someone else first');
     }
 
     if (pin !== undefined && pin !== null && pin !== '') {

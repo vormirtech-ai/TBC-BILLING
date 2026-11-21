@@ -151,6 +151,31 @@ CREATE TABLE IF NOT EXISTS shifts (
 CREATE INDEX IF NOT EXISTS shifts_day ON shifts (day);
 CREATE INDEX IF NOT EXISTS shifts_open ON shifts (closed_at) WHERE closed_at IS NULL;
 
+-- Who was in, and for how long.
+--
+-- One row per person per spell on the premises: clocked in, clocked out.
+-- Somebody who leaves and comes back gets a second row rather than having
+-- the first one rewritten, because "worked two to five and seven to eleven"
+-- is the truth and "worked two to eleven" is not.
+--
+-- Hours are not stored. They are clock_out minus clock_in, and a figure kept
+-- beside the two timestamps it comes from is a figure that can disagree
+-- with them.
+CREATE TABLE IF NOT EXISTS attendance (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  user_name  TEXT NOT NULL,            -- as it was then; staff get renamed
+  role       TEXT NOT NULL,
+  day        TEXT NOT NULL,            -- the business day, rolling at 05:00
+  clock_in   INTEGER NOT NULL,
+  clock_out  INTEGER,
+  note       TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS attendance_day ON attendance (day);
+CREATE INDEX IF NOT EXISTS attendance_user ON attendance (user_id);
+CREATE INDEX IF NOT EXISTS attendance_open ON attendance (user_id) WHERE clock_out IS NULL;
+
 -- Where the cloud copy has got to.
 --
 -- One row per table per direction, holding the `updated_at` of the newest row

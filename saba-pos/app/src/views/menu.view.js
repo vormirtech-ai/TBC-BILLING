@@ -125,7 +125,12 @@ function renderRow(item) {
     h('td', { text: CATEGORIES.find((c) => c.id === item.category)?.label || item.category }),
     h('td', {}, chip(stationById(item.station).label, 'outline')),
     h('td', { text: courseById(item.course).label }),
-    h('td.num', { text: money(item.pricePaise) }),
+    h('td.num', {}, [
+      money(item.pricePaise),
+      item.halfPricePaise
+        ? h('div.stat__note', { text: `half ${money(item.halfPricePaise)}` })
+        : null,
+    ]),
     h('td.num', { text: money(item.costPaise) }),
     h('td.num', {}, h('span', {
       class: margin >= 65 ? 'delta delta--up' : 'delta',
@@ -206,6 +211,11 @@ function editItem(item) {
     type: 'number', step: '1', min: '0', inputmode: 'decimal',
     value: dish.costPaise ? String(dish.costPaise / 100) : '',
   });
+  const halfPrice = h('input.input', {
+    type: 'number', step: '1', min: '0', inputmode: 'decimal',
+    placeholder: 'No half plate',
+    value: dish.halfPricePaise ? String(dish.halfPricePaise / 100) : '',
+  });
 
   const choose = (list, selected) => h('select.select', {}, list.map((entry) =>
     h('option', { value: entry.id, text: entry.label, selected: entry.id === selected })));
@@ -267,6 +277,7 @@ function editItem(item) {
         diet: diet.value,
         pricePaise: toPaise(price.value),
         costPaise: toPaise(cost.value),
+        halfPricePaise: halfPrice.value.trim() ? toPaise(halfPrice.value) : null,
       };
       if (!body.name) {
         toast('A dish needs a name', 'bad');
@@ -292,6 +303,9 @@ function editItem(item) {
         'When the kitchen is allowed to start it')),
       two(field('Kitchen station', station, 'Whose docket it lands on'), field('Diet', diet)),
       two(field('Menu price (₹)', price), field('Food cost (₹)', cost)),
+      field('Half plate (₹)', halfPrice,
+        'Leave it empty where the dish does not come as a half. A price of its '
+        + 'own, not a fraction — a half biryani is not half the work.'),
       preview,
       notice(
         isNew

@@ -303,7 +303,7 @@ on('POST', '/api/menu', (ctx) => {
 on('PATCH', '/api/menu/:itemId', (ctx) => {
   const patch = {};
   for (const key of ['name', 'description', 'pricePaise', 'costPaise',
-    'active', 'station', 'course', 'category', 'diet']) {
+    'halfPricePaise', 'active', 'station', 'course', 'category', 'diet']) {
     if (ctx.body[key] !== undefined) patch[key] = ctx.body[key];
   }
   const item = till.updateMenuItem(ctx.params.itemId, patch);
@@ -347,6 +347,31 @@ on('GET', '/api/audit', (ctx) => {
   const day = ctx.query.get('day') || till.today();
   return { day, entries: till.auditLog({ day, limit: 400 }) };
 }, { screen: '/reports' });
+
+/* --------------------------------------------------------- attendance --- */
+
+on('GET', '/api/attendance', (ctx) => {
+  const day = ctx.query.get('day') || till.today();
+  const everyone = ctx.query.get('all') === '1';
+  if (everyone && !(ROLE_ABILITIES[user().role] || []).includes('attendanceAll')) {
+    throw forbidden(`A ${user().role} cannot see everybody\u2019s hours`);
+  }
+  return {
+    day,
+    mine: till.attendanceOn(day, user().id),
+    open: till.openSpell(user().id),
+    everyone: everyone ? till.attendanceOn(day) : null,
+    revision: till.db.revision,
+  };
+}, { screen: '/attendance' });
+
+on('POST', '/api/attendance/in', () => ({
+  spell: till.clockIn(user()), revision: till.db.revision,
+}), { screen: '/attendance' });
+
+on('POST', '/api/attendance/out', (ctx) => ({
+  spell: till.clockOut(user(), { note: ctx.body.note }), revision: till.db.revision,
+}), { screen: '/attendance' });
 
 /* ------------------------------------------------------------- shifts --- */
 
@@ -394,11 +419,11 @@ on('POST', '/api/users', (ctx) => {
 on('PATCH', '/api/users/:id', (ctx) => {
   const row = till.db.users.find((u) => u.id === ctx.params.id);
   if (!row) throw notFound('No such member of staff');
-  const managers = till.db.users.filter((u) => u.active && u.role === 'manager').length;
-  const losing = row.role === 'manager' && row.active
-    && ((ctx.body.role && ctx.body.role !== 'manager') || ctx.body.active === false);
-  if (losing && managers <= 1) {
-    throw conflict('This is the only manager — promote someone else first');
+  const admins = till.db.users.filter((u) => u.active && u.role === 'admin').length;
+  const losing = row.role === 'admin' && row.active
+    && ((ctx.body.role && ctx.body.role !== 'admin') || ctx.body.active === false);
+  if (losing && admins <= 1) {
+    throw conflict('This is the only admin — promote someone else first');
   }
   if (ctx.body.name !== undefined) row.name = String(ctx.body.name).slice(0, 80);
   if (ctx.body.role !== undefined) row.role = ctx.body.role;
