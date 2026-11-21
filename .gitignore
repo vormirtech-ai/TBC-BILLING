@@ -13,3 +13,4 @@ Cafe_POS_Before_Restore_*.json
 # Nothing here is built, but keep these out anyway
 node_modules/
 dist/
+_site/

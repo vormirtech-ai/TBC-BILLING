@@ -8,6 +8,11 @@
 #   /saba/   Saba Fine Dine — a page about the product, the documentation, and
 #            a demonstration of it that runs entirely in the visitor's browser.
 #
+# `aasma-crm/` is not published here. It is a Vite/TypeScript application that
+# needs its own build; copying its source into the site would serve 35,000
+# lines of TypeScript that no browser can run. Giving it a path of its own is
+# a separate job for whoever owns it.
+#
 # What is published is a demonstration, not a till. Saba itself is a small
 # server with a database on the restaurant's own computer; it is installed
 # with `saba-pos/install.sh` and needs nothing from this website. See
@@ -68,6 +73,7 @@ jobs:
             --exclude=./node_modules \
             --exclude=./saba-pos \
             --exclude=./saba-demo \
+            --exclude=./aasma-crm \
             --exclude='*.zip' \
             . | tar -xf - -C _site
           # Saba: the page, the rendered documentation, and the demonstration.
