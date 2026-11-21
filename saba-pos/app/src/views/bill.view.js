@@ -13,7 +13,8 @@
 
 import { h, fill } from '../core/dom.js';
 import {
-  PAYMENT_METHODS, TIP_PRESETS, DISCOUNT_REASONS, paymentLabel, KOT_STATUS,
+  PAYMENT_METHODS, TIP_PRESETS, DISCOUNT_REASONS, UNPAY_REASONS,
+  paymentLabel, KOT_STATUS,
 } from '../shared/config.js';
 import { money, money0, toPaise, pct, splitEvenly } from '../shared/money.js';
 import { elapsed, clockTime, plural } from '../shared/format.js';
@@ -70,7 +71,7 @@ export function renderBillView(host, params) {
           ui.format,
           (id) => { ui.format = id; repaint(); }
         )),
-      h('div', { style: { display: 'grid', justifyItems: 'center' } },
+      h('div.settle__sheet', {},
         renderBill(order, totals, {
           format: ui.format,
           copy: settled ? 'Duplicate' : 'Not yet settled',
@@ -82,6 +83,58 @@ export function renderBillView(host, params) {
       ? renderSettled(order, totals)
       : renderSettle(order, totals)),
   ]));
+}
+
+/*
+ * Taking the service charge off is a giveaway the size of a discount, so it
+ * is approved the same way. Putting it back on costs the restaurant nothing
+ * and asks nobody.
+ */
+async function toggleServiceCharge(order, totals) {
+  const removing = totals.serviceChargeApplied;
+  let pin = null;
+
+  if (removing && !can('discount')) {
+    const approval = await authorise({
+      title: `Take the ${charges().serviceChargeLabel.toLowerCase()} off this bill?`,
+      subtitle: `That is ${money(totals.serviceCharge)} off table ${order.tableLabel}.`,
+      ability: 'discount',
+    });
+    if (!approval) return;
+    pin = approval.pin;
+  }
+
+  await setServiceCharge(order.id, !removing, pin);
+  toast(removing ? 'Service charge removed and logged' : 'Service charge applied',
+    removing ? 'warn' : 'good');
+}
+
+/*
+ * A payment coming back off a bill leaves the table looking unpaid, which is
+ * exactly what it looks like when the cash has been pocketed. The till asks
+ * why, in words, and asks a manager unless this person could void a dish.
+ */
+async function dropPayment(order, payment) {
+  let pin = null;
+  if (!can('void')) {
+    const approval = await authorise({
+      title: `Take ${money(payment.paise)} back off this bill?`,
+      subtitle: `${paymentLabel(payment.method)} on table ${order.tableLabel}.`,
+      ability: 'void',
+    });
+    if (!approval) return;
+    pin = approval.pin;
+  }
+
+  const reason = await askReason({
+    title: `Why is this ${paymentLabel(payment.method).toLowerCase()} payment coming off?`,
+    reasons: UNPAY_REASONS,
+    confirmLabel: 'Remove the payment',
+  });
+  if (!reason) return;
+
+  await removePayment(order.id, payment.id, reason, pin);
+  toast('Payment removed and logged', 'warn');
 }
 
 /* -------------------------------------------------------------- queue --- */
@@ -187,7 +240,7 @@ function renderSettle(order, totals) {
       h('button.btn.btn--outline.btn--block', {
         type: 'button',
         style: { justifyContent: 'space-between' },
-        onclick: () => setServiceCharge(order.id, !totals.serviceChargeApplied).catch(failed),
+        onclick: () => toggleServiceCharge(order, totals).catch(failed),
       }, [
         h('span.u-row', {}, [
           icon('users', { size: 16 }),
@@ -288,7 +341,7 @@ function renderSettle(order, totals) {
         h('button.btn.btn--ghost.btn--icon.btn--xs', {
           type: 'button',
           'aria-label': 'Remove this payment',
-          onclick: () => removePayment(order.id, payment.id).catch(failed),
+          onclick: () => dropPayment(order, payment).catch(failed),
         }, icon('trash', { size: 14 })),
       ])),
     ]) : null,

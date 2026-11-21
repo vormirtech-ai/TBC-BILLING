@@ -22,7 +22,8 @@
 
 import { h, fill } from '../core/dom.js';
 import {
-  COURSES, KOT_STATUS, VOID_REASONS, COMP_REASONS, stationById, courseById,
+  COURSES, KOT_STATUS, VOID_REASONS, COMP_REASONS, CANCEL_REASONS,
+  stationById, courseById,
 } from '../shared/config.js';
 import { CATEGORIES } from '../shared/catalogue.js';
 import { money } from '../shared/money.js';
@@ -32,6 +33,7 @@ import { coursePacing, heldLines, heldCourses, seatsUsed, lineName } from '../sh
 import {
   menu, modifierGroups, orderForTable, orderById, addItem, changeQty, dropLine,
   killLine, toggleComp, fire, updateOrder, can, markReprint, setEightySix,
+  moveLine, openOrders, cancelOrder,
 } from '../state.js';
 import { navigate } from '../core/router.js';
 import { setTopbar, repaint } from '../ui/shell.js';
@@ -46,7 +48,7 @@ import { renderKot, printDocs } from '../ui/print.js';
  * know, and keeping it here is what lets the pad repaint under a live update
  * without the carte jumping back to the top.
  */
-const ui = { category: 'all', query: '', seat: 0 };
+const ui = { category: 'all', query: '', seat: 0, pane: 'carte' };
 
 /** Report a refused command in the captain's language, not the network's. */
 const failed = (error) => toast(error.message || 'That did not go through', 'bad', 5000);
@@ -71,8 +73,9 @@ export function renderOrder(host, params) {
 
   setTopbar({
     title: `Table ${order.tableLabel}`,
-    subtitle: `${order.code} · ${plural(order.covers, 'cover')} · open ${elapsed(order.openedAt)}`
-      + ` · ${order.captainName}`,
+    subtitle: `${order.code} · ${plural(order.covers, 'cover')}`
+      + (order.guestName ? ` · ${order.guestName}` : '')
+      + ` · open ${elapsed(order.openedAt)} · ${order.captainName}`,
     actions: [
       h('button.btn.btn--ghost.btn--sm', {
         type: 'button', onclick: () => navigate('/floor'),
@@ -83,10 +86,16 @@ export function renderOrder(host, params) {
       h('button.btn.btn--outline.btn--sm', {
         type: 'button', onclick: () => navigate('/bill', { order: order.id }),
       }, [icon('bill', { size: 16 }), 'Bill']),
+      h('button.btn.btn--quiet-danger.btn--sm', {
+        type: 'button',
+        title: 'Cancel this table',
+        onclick: () => doCancelOrder(order),
+      }, [icon('close', { size: 16 }), 'Cancel']),
     ],
   });
 
-  fill(host, h('div.order', {}, [
+  fill(host, h('div.order', { dataset: { pane: ui.pane } }, [
+    renderPanes(order),
     h('div.order__left', {}, [
       renderTools(order),
       renderCategories(),
@@ -94,6 +103,31 @@ export function renderOrder(host, params) {
     ]),
     renderPad(order, totals, held),
   ]));
+}
+
+/**
+ * On a phone there is not room for the carte and the pad at once — showing
+ * both leaves a waiter one half-visible dish and a total they cannot read.
+ * So the two become tabs, and the CSS hides this switch entirely on anything
+ * wider than a phone, where both panes fit side by side as before.
+ */
+function renderPanes(order) {
+  const written = order.lines.filter((l) => l.status !== KOT_STATUS.VOID)
+    .reduce((n, l) => n + l.qty, 0);
+
+  const tab = (pane, label) => h('button.order__pane', {
+    type: 'button',
+    role: 'tab',
+    'aria-selected': String(ui.pane === pane),
+    onclick: () => { ui.pane = pane; repaint(); },
+  }, [label]);
+
+  return h('div.order__panes', { role: 'tablist' }, [
+    tab('carte', 'The carte'),
+    tab('order', written
+      ? h('span', {}, [`This table `, h('span.order__pane-count', { text: String(written) })])
+      : 'This table'),
+  ]);
 }
 
 /* --------------------------------------------------------- left side --- */
@@ -543,11 +577,137 @@ function lineActions(order, line) {
     }, icon('star', { size: 15 })),
     h('button.btn.btn--ghost.btn--icon.btn--sm', {
       type: 'button',
+      'aria-label': 'Move to another table',
+      title: 'Carried to the wrong table',
+      onclick: () => doMove(order, line),
+    }, icon('swap', { size: 15 })),
+    h('button.btn.btn--ghost.btn--icon.btn--sm', {
+      type: 'button',
       'aria-label': 'Void',
       title: 'Void this line',
       onclick: () => doVoid(order, line),
     }, icon('close', { size: 15 })),
   ];
+}
+
+/**
+ * Cancel the whole table.
+ *
+ * Nothing cooked is the captain's own mistake to undo — making them find a
+ * manager for a table seated in error only teaches them to say nothing. Once
+ * the kitchen has started, somebody has spent food, and that needs a manager
+ * and a reason. The rule lives in CANCEL_POLICY and is enforced by the till,
+ * not here; this only asks the right question.
+ */
+async function doCancelOrder(order) {
+  const started = Boolean(order.invoice)
+    || order.lines.some((l) => l.status !== KOT_STATUS.HELD && l.status !== KOT_STATUS.VOID);
+
+  const reason = await askReason({
+    title: `Cancel Table ${order.tableLabel}?`,
+    subtitle: started
+      ? 'The kitchen has already started on this one, so a manager has to approve it.'
+      : 'Nothing has gone to the kitchen, so nothing is lost. The table goes '
+        + 'back to vacant.',
+    reasons: CANCEL_REASONS,
+    confirmLabel: 'Cancel the table',
+  });
+  if (!reason) return;
+
+  let pin = null;
+  if (started) {
+    const approval = await authorise({
+      title: `Cancel Table ${order.tableLabel}?`,
+      subtitle: order.invoice
+        ? `This voids bill ${order.invoice.code}.`
+        : 'Food has already been cooked for this table.',
+      ability: 'cancelOrder',
+    });
+    if (!approval) return;
+    pin = approval.pin;
+  }
+
+  try {
+    await cancelOrder(order.id, reason, pin);
+    toast(`Table ${order.tableLabel} cancelled`, 'warn');
+    navigate('/floor');
+  } catch (error) { failed(error); }
+}
+
+/**
+ * The dish went to the wrong table.
+ *
+ * It happens in every dining room: the lamb goes to six when it was ordered
+ * on four. The guests have it, nobody wants it back, and the only question
+ * left is whose bill it lands on. A manager answers that, because it moves
+ * money between two guests.
+ */
+async function doMove(order, line) {
+  const elsewhere = openOrders().filter((o) => o.id !== order.id && !o.invoice);
+
+  if (!elsewhere.length) {
+    toast('No other table is open to move it to', 'warn', 4000);
+    return;
+  }
+
+  const chosen = await pickTable(line, elsewhere);
+  if (!chosen) return;
+
+  const approval = await authorise({
+    title: `Move ${line.qty} × ${lineName(line)} to Table ${chosen.tableLabel}?`,
+    subtitle: 'It leaves this bill and joins theirs. The kitchen docket stays '
+      + 'as it was printed.',
+    ability: 'moveLine',
+  });
+  if (!approval) return;
+
+  try {
+    await moveLine(order.id, line.id, chosen.id, approval.pin);
+    toast(`Moved to Table ${chosen.tableLabel}`, 'good');
+  } catch (error) { failed(error); }
+}
+
+/** Which table it should have gone to. */
+function pickTable(line, candidates) {
+  return new Promise((resolve) => {
+    let picked = null;
+    dialog({
+      title: `Where should ${lineName(line)} have gone?`,
+      subtitle: 'Only tables that are open and not yet billed.',
+      size: 'slim',
+      body: h('div.who', {}, candidates.map((other) =>
+        h('button.who__btn', {
+          type: 'button',
+          onclick: (event) => {
+            picked = other;
+            for (const sibling of event.currentTarget.parentElement.children) {
+              sibling.classList.toggle('who__btn--on', sibling === event.currentTarget);
+            }
+          },
+        }, [
+          h('span.who__avatar', { text: other.tableLabel }),
+          h('span.u-grow', {}, [
+            h('span.who__name', { text: `Table ${other.tableLabel}` }),
+            h('span.who__role', {
+              text: `${other.covers} covers${other.guestName ? ` · ${other.guestName}` : ''}`,
+            }),
+          ]),
+        ]))),
+      actions: [
+        { label: 'Cancel', onclick: (close) => { close(); resolve(null); } },
+        {
+          label: 'Move it',
+          tone: 'primary',
+          onclick: (close) => {
+            if (!picked) { toast('Pick a table first', 'warn'); return; }
+            close();
+            resolve(picked);
+          },
+        },
+      ],
+      onclose: (result) => { if (result === null && !picked) resolve(null); },
+    });
+  });
 }
 
 async function doVoid(order, line) {

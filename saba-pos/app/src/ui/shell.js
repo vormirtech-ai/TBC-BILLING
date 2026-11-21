@@ -154,6 +154,27 @@ export function paintRail() {
       }, [icon('logout', { size: 18 }), 'Out']),
     ]),
   ]);
+
+  keepCurrentInView();
+}
+
+/**
+ * On a phone the rail is a bar across the bottom, and an owner's eleven
+ * sections do not fit across 390px of glass — it scrolls. Make sure the
+ * section you are actually on is one of the ones you can see, and leave the
+ * bar alone the rest of the time so a repaint never yanks it under a thumb.
+ */
+function keepCurrentInView() {
+  if (!railHost || railHost.scrollWidth <= railHost.clientWidth + 1) return;
+  const here = railHost.querySelector('[aria-current="page"]');
+  if (!here) return;
+
+  const bar = railHost.getBoundingClientRect();
+  const item = here.getBoundingClientRect();
+  if (item.left >= bar.left && item.right <= bar.right) return;
+
+  railHost.scrollLeft += (item.left - bar.left)
+    - (bar.width - item.width) / 2;
 }
 
 /**

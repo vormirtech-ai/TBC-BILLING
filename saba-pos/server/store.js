@@ -20,13 +20,14 @@ import { log } from './log.js';
 
 import {
   NUMBERING, DAY_ROLLOVER_HOUR, RESTAURANT, CHARGES, STATIONS, COURSES,
+  PAYMENT_METHODS,
 } from '../app/src/shared/config.js';
 import { businessDay, serial } from '../app/src/shared/format.js';
 import { costOrder, useCharges, charges } from '../app/src/shared/pricing.js';
 import {
   createOrder as buildOrder, addLine, setLineQty, removeHeldLine, voidLine,
   compLine, fireCourse, advanceKot, voidKot, reprintKot, moveLineToSeat,
-  orderStage, orderValue,
+  orderStage, orderValue, kotLines,
 } from '../app/src/shared/orders.js';
 import {
   SECTIONS, TABLES, tableById, useFloorPlan, floorPlan,
@@ -38,7 +39,19 @@ const SETTING_DEFAULTS = {
   restaurant: RESTAURANT,
   charges: CHARGES,
   stations: STATIONS,
-  printing: { billFormat: 'A4', watermark: true },
+  printing: {
+    billFormat: 'A4',
+    watermark: true,
+    /**
+     * Where kitchen dockets print, or '' for the screen only.
+     *
+     * A network printer is `host:port` — almost always port 9100, which is
+     * what "raw printing" means. A USB one on Linux is its device file,
+     * such as /dev/usb/lp0.
+     */
+    kotPrinter: '',
+    paper: '80mm',
+  },
   floorplan: { sections: SECTIONS, tables: TABLES },
 };
 
@@ -663,7 +676,39 @@ export function fire(orderId, courseId, user) {
     }
     return kots;
   });
+
+  // On paper too, if the kitchen has a printer. Deliberately not awaited: a
+  // printer that is off or out of paper must not hold up a course going to
+  // the pass, and the kitchen screen has the docket either way.
+  printDockets(order, result);
+
   return { order, kots: result };
+}
+
+/**
+ * Put the dockets on paper.
+ *
+ * Fire-and-forget, by design. Nothing here is awaited and nothing here can
+ * throw into the caller: the worst a dead printer does is write one line to
+ * the log and leave the kitchen reading its screen, which is what a kitchen
+ * display is for.
+ */
+function printDockets(order, kots) {
+  const printing = getSetting('printing') || {};
+  if (!printing.kotPrinter || !kots?.length) return;
+
+  (async () => {
+    const [{ renderKot }, printer] = await Promise.all([
+      import('./printer/escpos.js'),
+      import('./printer/index.js'),
+    ]);
+    for (const kot of kots) {
+      const lines = kotLines(order, kot);
+      if (!lines.length) continue;
+      await printer.send(kot.printer || printing.kotPrinter,
+        renderKot(kot, lines, order, { paper: printing.paper || '80mm' }));
+    }
+  })().catch((error) => log.error('printing failed', { error: error.message }));
 }
 
 /** Dockets are addressed by their own id; the server finds the order. */
@@ -715,7 +760,8 @@ export function setCharges(orderId, { serviceCharge, discount, tip }, { user, ap
     if (serviceCharge !== undefined) {
       order.charges.serviceCharge = !!serviceCharge;
       audit('BILL',
-        `Service charge ${serviceCharge ? 'applied' : 'removed'} on Table ${order.tableLabel}`,
+        `Service charge ${serviceCharge ? 'applied' : 'removed'} on Table ${order.tableLabel}`
+        + (!serviceCharge && approver ? ` (approved by ${approver.name})` : ''),
         { actor: user.name, meta: { orderId } });
     }
     if (discount !== undefined) {
@@ -741,7 +787,16 @@ export function setCharges(orderId, { serviceCharge, discount, tip }, { user, ap
 }
 
 export function setSplit(orderId, split) {
-  return mutateOrder(orderId, (order) => { order.split = split; }).order;
+  return mutateOrder(orderId, (order) => {
+    // Each payment is taken against one share. Re-cut the bill underneath
+    // them and that money is attached to a share that no longer exists, so
+    // the shares stop adding up to what has actually been paid.
+    if (order.payments.length) {
+      throw conflict('Money has already been taken on this bill, so it cannot'
+        + ' be split differently. Remove the payments first.');
+    }
+    order.split = split;
+  }).order;
 }
 
 export function raiseInvoice(orderId, user) {
@@ -769,6 +824,11 @@ export function raiseInvoice(orderId, user) {
 export function addPayment(orderId, { method, paise, ref, shareId }, user) {
   const amount = Math.round(Number(paise) || 0);
   if (amount <= 0) throw new HttpError(400, 'A payment has to be more than nothing');
+  // An unknown tender would quietly become its own column in the day's
+  // takings, and only CASH is counted against the drawer at close.
+  if (!PAYMENT_METHODS.some((m) => m.id === method)) {
+    throw new HttpError(400, `${method} is not a way this till takes money`);
+  }
 
   return mutateOrder(orderId, (order) => {
     order.payments.push({
@@ -791,15 +851,19 @@ export function addPayment(orderId, { method, paise, ref, shareId }, user) {
   }).order;
 }
 
-export function removePayment(orderId, paymentId, user) {
+export function removePayment(orderId, paymentId, { user, approver, reason }) {
   return mutateOrder(orderId, (order) => {
     const payment = order.payments.find((p) => p.id === paymentId);
     if (!payment) throw notFound('No such payment');
     order.payments = order.payments.filter((p) => p.id !== paymentId);
     audit('PAYMENT',
       `Removed a ${payment.method} payment of ${(payment.paise / 100).toFixed(2)}`
-      + ` from Table ${order.tableLabel}`,
-      { actor: user.name, meta: { orderId } });
+      + ` from Table ${order.tableLabel} — ${reason}`
+      + (approver ? ` (approved by ${approver.name})` : ''),
+      {
+        actor: user.name,
+        meta: { orderId, method: payment.method, paise: payment.paise, reason },
+      });
   }).order;
 }
 
@@ -835,6 +899,46 @@ export function settleOrder(orderId, user) {
     return order;
   });
 }
+
+/**
+ * Cancel a whole table. See CANCEL_POLICY in shared/config.js for the rule.
+ *
+ * The order is kept, marked VOID, with the reason and who approved it. It is
+ * not deleted: a table that was open for forty minutes and then cancelled is
+ * something a manager may be asked about, and a row that vanished answers
+ * nothing. It leaves the floor, and the table goes back to vacant.
+ */
+export function cancelOrder(orderId, { reason, user, approver }) {
+  return tx(() => {
+    const order = getOrder(orderId);
+    if (!order) throw notFound('That table is no longer open');
+    if (order.status === 'SETTLED') {
+      throw conflict('That bill has been settled — reopen it instead');
+    }
+    if (order.status !== 'OPEN') throw conflict('That table is already closed');
+
+    order.status = 'VOID';
+    order.closedAt = Date.now();
+    order.cancelled = {
+      reason,
+      by: (approver || user).name,
+      at: Date.now(),
+      invoice: order.invoice?.code || null,
+    };
+    persist(order);
+
+    audit('CANCEL',
+      `Table ${order.tableLabel} cancelled — ${reason}`
+      + (order.invoice ? ` (voids bill ${order.invoice.code})` : ''),
+      { actor: (approver || user).name, meta: { orderId, covers: order.covers } });
+    bumpRevision();
+    return order;
+  });
+}
+
+/** Has the kitchen started on any of it? That is what decides who may cancel. */
+export const needsApprovalToCancel = (order) =>
+  Boolean(order.invoice) || order.lines.some((l) => l.status !== 'HELD' && l.status !== 'VOID');
 
 export function reopenOrder(orderId, approver) {
   return tx(() => {

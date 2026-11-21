@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { test } from '../run.mjs';
+import { nextPort } from '../port.mjs';
 
 import { handle } from '../../app/src/net/till/index.js';
 import { seedDemo } from '../../app/src/net/till/seed.js';
@@ -26,14 +27,14 @@ import { costOrder, useCharges } from '../../app/src/shared/pricing.js';
 import { useFloorPlan } from '../../app/src/shared/floorplan.js';
 import { buildWorkedExample } from '../../app/src/shared/worked-example.js';
 
-let port = 9800 + Math.floor(Math.random() * 300);
+let port = 0;
 
 /* ------------------------------------------------------- the two tills --- */
 
 /** The real thing: a server, a database, HTTP. */
 async function realTill() {
   const dir = mkdtempSync(join(tmpdir(), 'saba-parity-'));
-  port += 1;
+  port = nextPort();
 
   const { start } = await import('../../server/main.js');
   const db = await import('../../server/db/index.js');
@@ -275,6 +276,22 @@ test('the demonstration refuses what the product refuses', async (t) => {
   await browser.call('POST', `/api/menu/${dish.id}/eighty-six`, { on: true });
   const off = await browser.call('POST', `/api/orders/${id}/lines`, { itemId: dish.id, qty: 1 });
   t.equal(off.status, 409, 'an 86 dish cannot be rung up');
+
+  // A tender the till does not take.
+  const invented = await browser.call('POST', `/api/orders/${id}/payments`,
+    { method: 'BITCOIN', paise: 100 });
+  t.equal(invented.status, 400, 'and an invented tender is refused');
+
+  // Money coming back off a bill, with nothing said about why.
+  await browser.call('POST', `/api/orders/${id}/payments`, { method: 'CASH', paise: 1000 });
+  const paid = (await browser.call('GET', `/api/orders/${id}`)).json.order;
+  const silent = await browser.call('DELETE',
+    `/api/orders/${id}/payments/${paid.payments[0].id}`, {});
+  t.equal(silent.status, 400, 'a payment cannot come off a bill unexplained');
+
+  // And the bill cannot be re-cut under the money already taken.
+  const recut = await browser.call('POST', `/api/orders/${id}/split`, { mode: 'EQUAL', ways: 2 });
+  t.equal(recut.status, 409, 'a paid bill cannot be re-split underneath the money');
 
   await browser.stop();
 });

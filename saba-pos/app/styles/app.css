@@ -553,12 +553,21 @@ a { color: var(--navy); }
   color: var(--ink-3); pointer-events: none;
 }
 
-/* Segmented control — the tab pattern used for stations, courses, ranges. */
+/* Segmented control — the tab pattern used for stations, courses, ranges.
+ *
+ * It scrolls sideways inside itself rather than pushing the page wide. Six
+ * rooms or twelve seats on a phone would otherwise put the last of them off
+ * the edge of the glass with no way to reach it. */
 .segmented {
   display: inline-flex; padding: 3px; gap: 2px;
   background: var(--paper-3); border-radius: var(--r);
   border: 1px solid var(--line);
+  max-width: 100%; min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+.segmented::-webkit-scrollbar { display: none; }
+.segmented__btn { flex: none; }
 
 .segmented__btn {
   min-height: 36px; padding: 0 14px;
@@ -689,7 +698,10 @@ a { color: var(--navy); }
 
 .divider { height: 1px; background: var(--line); margin: 14px 0; }
 
-.grid { display: grid; gap: 14px; }
+/* minmax(0, 1fr), not the implicit `auto` column: an auto track will not
+   shrink below its widest child, so one wide table inside a .grid quietly
+   pushes the whole screen sideways on a phone. */
+.grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 .grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -772,6 +784,13 @@ a { color: var(--navy); }
 
 .who__btn:hover { border-color: var(--gold); background: var(--gold-tint); }
 .who__btn:active { transform: scale(.99); }
+
+/* Picked, in a list you pick from rather than tap straight through. */
+.who__btn--on {
+  border-color: var(--navy); background: var(--navy-tint);
+  box-shadow: var(--ring);
+}
+.who__btn--on .who__avatar { background: var(--navy-deep); }
 
 .who__avatar {
   width: 42px; height: 42px; border-radius: 50%; flex: none;
@@ -1055,9 +1074,6 @@ a { color: var(--navy); }
   display: flex; align-items: center; gap: 7px;
   min-width: 0; max-width: 100%;
 }
-.seats .segmented { overflow-x: auto; scrollbar-width: none; min-width: 0; }
-.seats .segmented::-webkit-scrollbar { display: none; }
-.seats .segmented__btn { flex: none; }
 
 .cats {
   display: flex; gap: 7px; padding: 0 20px 12px;
@@ -1270,6 +1286,28 @@ a { color: var(--navy); }
 .totals__row .u-num { font-variant-numeric: tabular-nums; }
 
 .pad__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* The carte / this-table switch. Only ever seen on a phone — see the narrow
+   block at the foot of this file, which is what turns it on. */
+.order__panes { display: none; }
+.order__pane {
+  min-height: var(--tap);
+  border-radius: var(--r); border: 1px solid var(--line);
+  background: var(--paper);
+  font: 600 14px/1 var(--sans); color: var(--ink-2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+}
+.order__pane[aria-selected='true'] {
+  background: var(--navy); border-color: var(--navy); color: var(--gold-light);
+}
+.order__pane-count {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--line); color: var(--ink-2);
+  font: 700 12px/20px var(--sans); text-align: center;
+}
+.order__pane[aria-selected='true'] .order__pane-count {
+  background: var(--gold); color: #06182e;
+}
 
 @media (max-width: 1180px) {
   .order { grid-template-columns: 1fr minmax(330px, 380px); }
@@ -1576,6 +1614,11 @@ a { color: var(--navy); }
 }
 .split-line__move:hover { background: var(--navy-tint); }
 
+/* The A4 preview is a real 186mm page. It fits a desk; on a phone it is
+   panned sideways rather than squeezed into something nobody can read. The
+   80mm docket, which is what a captain usually wants, fits as it is. */
+.settle__sheet { display: grid; justify-items: center; }
+
 @media (max-width: 1200px) {
   .settle { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
   .settle__right { border-left: 0; border-top: 1px solid var(--line); box-shadow: none; }
@@ -1751,27 +1794,162 @@ a { color: var(--navy); }
     grid-row: 2; flex-direction: row; padding: 6px;
     justify-content: space-around; align-items: center;
     border-top: 1px solid rgba(196, 154, 74, .24);
+    /* Clear of the home indicator on a phone that has one. */
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
   }
-  .rail__brand, .rail__user, .rail__spacer { display: none; }
+  .rail__brand, .rail__spacer { display: none; }
+  /*
+   * Sign out lives in the user block, which used to be hidden wholesale down
+   * here — so nobody could hand the tablet to the next shift. `contents`
+   * drops the block and leaves the button itself in the bar.
+   */
+  .rail__user { display: contents; }
+  .rail__avatar { display: none; }
   .rail__item { flex: 1; padding: 7px 2px; font-size: 10px; }
   .rail__item[aria-current='page']::before { display: none; }
+  .rail__badge { top: 2px; right: 50%; margin-right: -22px; }
   .main { grid-row: 1; }
-  .order { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
-  .pad { border-left: 0; border-top: 1px solid var(--line); max-height: 52vh; }
+
+
   .view__pad { padding: 16px 14px 32px; }
   .settle__left, .settle__right { padding: 16px 14px 28px; }
+  .settle__sheet { justify-items: start; overflow-x: auto; max-width: 100%; }
 
-  /* The date and clock are the first thing to go: the screen title and the
-     actions on it are what somebody standing at a table actually needs. */
+  /* A booking is time, who, and what to do about it — three things that do
+     not fit on one line of a phone. Let the card become two. */
+  .row-card { flex-wrap: wrap; row-gap: 9px; gap: 10px; padding: 11px 13px; }
+  .row-card > .u-grow { flex: 1 1 55%; min-width: 0; }
+  .row-card__actions { margin-left: auto; }
+
+  /* A setting is a label, an explanation and a control. On a phone the
+     control drops under the words rather than squeezing them. */
+  .setting { flex-wrap: wrap; gap: 10px; }
+  .setting__control { flex: 1 1 100%; min-width: 0; display: flex; justify-content: flex-end; }
+  .setting__control > * { max-width: 100%; min-width: 0; }
+
+  /*
+   * Several screens lay their cards out two across with an inline style, and
+   * an inline style outranks a class — so this is the one place in the sheet
+   * that has to shout. Two cards across a 390px screen is unreadable
+   * whatever the screen is for.
+   */
+  .view__pad .grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .donut__key { min-width: 140px; }
+
+  /* A table of dishes or of hours has more columns than a phone has width.
+     Let it scroll inside its card rather than being cut off at the edge. */
+  .table { display: block; overflow-x: auto; max-width: 100%; }
+  .table thead, .table tbody { display: table; width: 100%; min-width: 420px; }
+
+  /* Eleven sections do not fit across 390px of glass, so the bar scrolls.
+     Five or six — which is what a waiter or a captain sees — still spread
+     across the full width. */
+  .rail { gap: 0; padding-left: 2px; padding-right: 2px; overflow-x: auto; scrollbar-width: none; }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail__item {
+    flex: 1 0 auto; min-width: 46px; padding: 7px 1px;
+    font-size: 9.5px; letter-spacing: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
   /* Four levels of nested padding leaves a phone one narrow column of tables.
      Give the plan the width back so two fit. */
   .floor__section { padding: 0 10px; }
   .floor__plan { margin: 12px 0 20px; padding: 12px; min-height: 0; }
   .plan__stage { grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); }
 
-  .topbar { padding: 0 12px; gap: 10px; }
+  /*
+   * The title and its buttons fought over one 60px row and the title lost —
+   * "Table 3" rendered as a single clipped letter. Give the bar as many rows
+   * as it needs: the title on its own line, the actions under it.
+   * The date and clock are the first thing to go; somebody standing at a
+   * table needs the screen's name and its buttons, not the date.
+   */
+  .main { grid-template-rows: auto minmax(0, 1fr); }
+  .topbar {
+    flex-wrap: wrap; align-items: center;
+    padding: 9px 12px; gap: 8px;
+  }
+  .topbar > .u-grow { flex: 1 1 100%; min-width: 0; }
   .topbar > .u-col:last-child { display: none; }
-  .topbar .btn { padding: 0 10px; }
+  .topbar .btn { padding: 0 12px; flex: 1 1 auto; }
+  .topbar__title { font-size: 17px; }
+
+  /* At the bottom of a phone a toast lands on the thumb bar, and on a
+     dialog's Cancel button. Put it at the top, where nothing is. */
+  .toasts { top: calc(env(safe-area-inset-top) + 10px); bottom: auto; }
+
+  /* 24px of scrim each side costs a dialog an eighth of a 390px screen. */
+  .scrim { padding: 14px; }
+  .modal { max-height: 92vh; }
+  .modal__body { padding: 16px; }
+  .modal__foot { padding: 12px 16px; }
+}
+
+/*
+ * A finger is not a mouse pointer. The extra-small buttons that sit inside
+ * dense table rows are fine under a cursor and too small under a thumb, so
+ * on any touch screen they grow to something you can actually hit.
+ */
+@media (pointer: coarse) {
+  .btn--xs { min-height: 36px; padding: 0 12px; }
+  .btn--icon.btn--xs { min-width: 36px; }
+}
+
+/* ------------------------------------------------- the order screen --- */
+
+/*
+ * A tablet held in portrait still has room for the carte and the pad side by
+ * side, so this is a narrower breakpoint than the one above. Below it, the
+ * two are tabs: side by side on a 390px screen leaves a waiter one
+ * half-visible dish and a running total hidden under the thumb bar.
+ */
+@media (max-width: 700px) {
+  .order {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .order__panes {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    padding: 10px 12px;
+    background: var(--paper-2); border-bottom: 1px solid var(--line);
+  }
+  .order[data-pane='carte'] .pad { display: none; }
+  .order[data-pane='order'] .order__left { display: none; }
+
+  /*
+   * The foot used to eat the whole pad — the lines, which are the point of
+   * the screen, were left a 30px sliver. Trimming the bands around them
+   * gives the list its height back, and Fire stays where a thumb is.
+   */
+  .pad { border-left: 0; min-height: 0; }
+  .pad__lines { min-height: 90px; }
+  /* "5 items waiting to go to the kitchen" — the Fire button says so too. */
+  .pad__foot > .notice { display: none; }
+  /* The gold band repeats the title bar word for word, and those 80px are
+     two more dishes the waiter can see. The guest's name, the one thing only
+     it carried, is in the subtitle above. */
+  .pad__head { display: none; }
+  .pad__foot { padding: 10px 14px 12px; }
+  .pacing { padding: 8px 12px; gap: 3px; }
+  .pace { padding: 6px 4px 5px; }
+
+  /* Two dishes across rather than one: 196px minimums left a 390px screen
+     showing a single dish at a time. */
+  .dishes {
+    padding: 4px 12px 24px; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  }
+  .dish { padding: 10px 11px 9px; min-height: 104px; }
+  .order__tools { padding: 12px 12px 8px; }
+  .cats { padding: 0 12px 10px; }
+}
+
+/* A phone held upright with the keyboard open has almost no height left; the
+   dish grid is what should give way, never the search box above it. */
+@media (max-width: 700px) and (max-height: 480px) {
+  .order__panes { padding: 6px 12px; }
+  .order__pane { min-height: 38px; }
 }
 
 /* ------------------------------------------------------------ print --- */

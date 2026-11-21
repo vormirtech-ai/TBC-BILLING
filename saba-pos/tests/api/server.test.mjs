@@ -16,10 +16,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { test } from '../run.mjs';
+import { nextPort } from '../port.mjs';
 
 /* ------------------------------------------------------------- harness --- */
 
-let port = 9400 + Math.floor(Math.random() * 400);
+let port = 0;
 
 /**
  * Start a server in this process with a throwaway database on a free port.
@@ -34,7 +35,7 @@ let port = 9400 + Math.floor(Math.random() * 400);
  */
 async function startServer({ demo = false, setupPin = '7391' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'saba-test-'));
-  port += 1;
+  port = nextPort();
 
   const { start } = await import('../../server/main.js');
   const db = await import('../../server/db/index.js');
@@ -653,6 +654,123 @@ test('a floor plan that makes no sense is refused', async (t) => {
   });
 });
 
+/* -------------------------------------------------------- cancellation --- */
+
+test('a table with nothing cooked is cancelled by whoever seated it', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+    await call('POST', '/api/users', { name: 'Cap', role: 'captain', pin: '8372' });
+
+    const captain = client(server.base);
+    await signIn(captain, '8372', 'Cap');
+
+    const state = (await captain('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.available);
+    const { id } = (await captain('POST', '/api/tables/t1/seat', { covers: 4 })).json.order;
+    await captain('POST', `/api/orders/${id}/lines`, { itemId: dish.id, qty: 2 });
+
+    // Nothing fired, so no manager is needed — a captain undoes their own
+    // mistake rather than learning to say nothing about it.
+    const cancelled = await captain('POST', `/api/orders/${id}/cancel`,
+      { reason: 'Table seated by mistake' });
+    t.equal(cancelled.status, 200);
+    t.equal(cancelled.json.order.status, 'VOID');
+    t.equal(cancelled.json.order.cancelled.by, 'Cap', 'recorded against the captain');
+
+    // The table is free again.
+    const floor = (await captain('GET', '/api/state')).json;
+    t.notOk(floor.orders.some((o) => o.id === id), 'it has left the floor');
+    t.equal((await captain('POST', '/api/tables/t1/seat', { covers: 2 })).status, 200,
+      'and the table can be seated again');
+  });
+});
+
+test('once the kitchen has started, cancelling needs a manager and a reason', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+    await call('POST', '/api/users', { name: 'Cap', role: 'captain', pin: '8372' });
+
+    const captain = client(server.base);
+    await signIn(captain, '8372', 'Cap');
+    const state = (await captain('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.available);
+    const { id } = (await captain('POST', '/api/tables/t2/seat', { covers: 2 })).json.order;
+    await captain('POST', `/api/orders/${id}/lines`, { itemId: dish.id, qty: 1 });
+    await captain('POST', `/api/orders/${id}/fire`, { course: dish.course });
+
+    const noReason = await captain('POST', `/api/orders/${id}/cancel`, {});
+    t.equal(noReason.status, 400, 'a reason is required');
+
+    const noManager = await captain('POST', `/api/orders/${id}/cancel`,
+      { reason: 'Guest cancelled' });
+    t.equal(noManager.status, 403, 'and food has been cooked, so a manager must approve');
+
+    const done = await captain('POST', `/api/orders/${id}/cancel`,
+      { reason: 'Guest cancelled', approverPin: server.setupPin });
+    t.equal(done.status, 200);
+    t.equal(done.json.order.cancelled.by, 'Owner', 'recorded against who approved it');
+
+    const entry = (await call('GET', '/api/audit')).json.entries
+      .find((e) => e.kind === 'CANCEL');
+    t.ok(entry, 'and it is on the record');
+    t.ok(entry.message.includes('Guest cancelled'), 'with the reason');
+  });
+});
+
+test('a printed bill can be cancelled, and a settled one cannot', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+    const state = (await call('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.available);
+
+    const { id } = (await call('POST', '/api/tables/t3/seat', { covers: 2 })).json.order;
+    await call('POST', `/api/orders/${id}/lines`, { itemId: dish.id, qty: 1 });
+    const invoice = (await call('POST', `/api/orders/${id}/invoice`)).json.order.invoice;
+
+    const cancelled = await call('POST', `/api/orders/${id}/cancel`,
+      { reason: 'Duplicate order', approverPin: server.setupPin });
+    t.equal(cancelled.status, 200, 'a printed bill can still be cancelled');
+    t.equal(cancelled.json.order.cancelled.invoice, invoice.code,
+      'and the record names the bill it voids');
+
+    // A settled one is history. Reopen it instead — which only an owner can do.
+    const { id: paid } = (await call('POST', '/api/tables/t5/seat', { covers: 2 })).json.order;
+    await call('POST', `/api/orders/${paid}/lines`, { itemId: dish.id, qty: 1 });
+    const totals = (await call('GET', `/api/orders/${paid}`)).json.totals;
+    await call('POST', `/api/orders/${paid}/payments`, { method: 'CASH', paise: totals.total });
+    await call('POST', `/api/orders/${paid}/settle`);
+
+    const refused = await call('POST', `/api/orders/${paid}/cancel`,
+      { reason: 'Guest cancelled', approverPin: server.setupPin });
+    t.equal(refused.status, 409, 'a settled bill cannot be cancelled');
+    t.ok(/reopen/i.test(refused.json.error), refused.json.error);
+  });
+});
+
+test('a cancelled table is kept, not erased, and is not counted as takings', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+    const state = (await call('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.available);
+
+    const before = (await call('GET', '/api/reports/day/' + state.businessDay)).json;
+
+    const { id } = (await call('POST', '/api/tables/t6/seat', { covers: 8 })).json.order;
+    await call('POST', `/api/orders/${id}/lines`, { itemId: dish.id, qty: 6 });
+    await call('POST', `/api/orders/${id}/cancel`, { reason: 'Guests left before ordering' });
+
+    const after = (await call('GET', '/api/reports/day/' + state.businessDay)).json;
+    t.equal(after.totals.total, before.totals.total, 'it adds nothing to the takings');
+    t.equal(after.totals.covers, before.totals.covers, 'nor to the covers');
+
+    // But the order is still there to be asked about.
+    const order = (await call('GET', `/api/orders/${id}`)).json.order;
+    t.equal(order.status, 'VOID');
+    t.equal(order.cancelled.reason, 'Guests left before ordering');
+    t.equal(order.covers, 8, 'with what it was');
+  });
+});
+
 /* ----------------------------------------------------------- the money --- */
 
 test('every tender is recorded, so cash entered as UPI leaves a trail', async (t) => {
@@ -677,10 +795,56 @@ test('every tender is recorded, so cash entered as UPI leaves a trail', async (t
     // Removing it is recorded too, so taking a payment and quietly dropping
     // it is two entries rather than none.
     const order = (await call('GET', `/api/orders/${id}`)).json.order;
-    await call('DELETE', `/api/orders/${id}/payments/${order.payments[0].id}`);
+    const pay = `/api/orders/${id}/payments/${order.payments[0].id}`;
+
+    t.equal((await call('DELETE', pay, {})).status, 400,
+      'and it cannot be dropped without saying why');
+
+    await call('DELETE', pay, { reason: 'guest paid in cash instead' });
     const after = (await call('GET', '/api/audit')).json.entries
       .filter((e) => e.kind === 'PAYMENT');
     t.equal(after.length, 2, 'both the taking and the removing are on the record');
+    t.ok(after[0].message.includes('cash instead'), 'with the reason given');
+  });
+});
+
+test('money cannot leave a bill on a captain\u2019s own say-so', async (t) => {
+  await withServer({}, async (server, call) => {
+    await signIn(call, server.setupPin);
+    const state = (await call('GET', '/api/state')).json;
+    const dish = state.menu.find((i) => i.available);
+    const { id } = (await call('POST', '/api/tables/t1/seat', { covers: 2 })).json.order;
+    await call('POST', `/api/orders/${id}/lines`, { itemId: dish.id, qty: 1 });
+    await call('POST', `/api/orders/${id}/payments`, { method: 'CASH', paise: 50000 });
+    const paid = (await call('GET', `/api/orders/${id}`)).json.order;
+
+    await call('POST', '/api/users', { name: 'Cap', role: 'captain', pin: '8371' });
+    const captain = client(server.base);
+    await signIn(captain, '8371', 'Cap');
+
+    t.equal((await captain('DELETE', `/api/orders/${id}/payments/${paid.payments[0].id}`,
+      { reason: 'mistake' })).status, 403,
+    'a captain cannot take a recorded payment back off the bill');
+
+    // A tender the till does not know would become its own line in the day's
+    // takings, and only cash is counted against the drawer.
+    t.equal((await call('POST', `/api/orders/${id}/payments`,
+      { method: 'BITCOIN', paise: 100 })).status, 400,
+    'and an invented tender is refused');
+
+    // The service charge on a large bill is worth more than the discount
+    // that needs a manager, so it is approved the same way.
+    t.equal((await captain('PATCH', `/api/orders/${id}/charges`,
+      { serviceCharge: false })).status, 403,
+    'a captain cannot quietly take the service charge off');
+    t.equal((await captain('PATCH', `/api/orders/${id}/charges`,
+      { serviceCharge: false, approverPin: server.setupPin })).status, 200,
+    'but a manager standing beside them can');
+
+    // Re-cutting a bill under its payments orphans the money.
+    t.equal((await call('POST', `/api/orders/${id}/split`,
+      { mode: 'EQUAL', ways: 2 })).status, 409,
+    'and a paid bill cannot be re-split underneath the money');
   });
 });
 

@@ -232,13 +232,17 @@ on('POST', '/api/kots/:kotId/reprint', (ctx) =>
 /* --------------------------------------------------------------- bill --- */
 
 on('PATCH', '/api/orders/:id/charges', (ctx) => {
+  const may = (ability) => (ROLE_ABILITIES[user().role] || []).includes(ability);
   let approver = null;
   const wants = ctx.body.discount;
   if (wants && wants.mode === 'PCT'
     && Number(wants.value) > charges().discountApprovalPercent) {
     approver = approvalFrom(ctx.body, 'discount');
-  } else if (wants && wants.mode !== 'NONE' && Number(wants.value) > 0
-    && !(ROLE_ABILITIES[user().role] || []).includes('discount')) {
+  } else if (wants && wants.mode !== 'NONE' && Number(wants.value) > 0 && !may('discount')) {
+    approver = approvalFrom(ctx.body, 'discount');
+  }
+  // Taking the service charge off is a giveaway the size of a discount.
+  if (ctx.body.serviceCharge === false && !may('discount')) {
     approver = approvalFrom(ctx.body, 'discount');
   }
   return withOrder(till.setCharges(ctx.params.id, ctx.body, { user: user(), approver }));
@@ -266,14 +270,32 @@ on('POST', '/api/orders/:id/invoice', (ctx) =>
 on('POST', '/api/orders/:id/payments', (ctx) =>
   withOrder(till.addPayment(ctx.params.id, ctx.body, user())), { screen: '/bill' });
 
-on('DELETE', '/api/orders/:id/payments/:payId', (ctx) =>
-  withOrder(till.removePayment(ctx.params.id, ctx.params.payId)), { screen: '/bill' });
+// Taking a payment back off a bill is how cash walks out of a restaurant.
+on('DELETE', '/api/orders/:id/payments/:payId', (ctx) => {
+  const reason = requireReason(ctx.body);
+  const approver = (ROLE_ABILITIES[user().role] || []).includes('void')
+    ? null
+    : approvalFrom(ctx.body, 'void');
+  return withOrder(till.removePayment(ctx.params.id, ctx.params.payId, {
+    user: user(), approver, reason,
+  }));
+}, { screen: '/bill' });
 
 on('POST', '/api/orders/:id/settle', (ctx) => {
   const order = till.getOrder(ctx.params.id);
   if (!order) throw notFound('That table is no longer open');
   return withOrder(till.settleOrder(ctx.params.id, user(), costOrder(order).total));
 }, { screen: '/bill' });
+
+on('POST', '/api/orders/:id/cancel', (ctx) => {
+  const order = till.getOrder(ctx.params.id);
+  if (!order) throw notFound('That table is no longer open');
+  const reason = requireReason(ctx.body);
+  const approver = till.needsApprovalToCancel(order)
+    ? approvalFrom(ctx.body, 'cancelOrder')
+    : null;
+  return withOrder(till.cancelOrder(ctx.params.id, { reason, user: user(), approver }));
+}, { screen: '/order' });
 
 on('POST', '/api/orders/:id/reopen', (ctx) =>
   withOrder(till.reopenOrder(ctx.params.id, approvalFrom(ctx.body, 'reopen'))),

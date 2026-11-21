@@ -25,18 +25,27 @@ third year of using it.
 | | |
 |---|---|
 | **Floor** | Live plan of every room. Seat, move, merge and transfer tables; covers, elapsed time and running total on each; reservations seated straight onto the plan. |
-| **Order** | The carte by course, with modifiers, allergy notes and seat numbers. Fire a course and the kitchen sees it before the captain has put the tablet down. |
-| **Kitchen** | A ticket per course per station, timed, with the ones that are running late brought to the front. Bump, recall, reprint. |
+| **Order** | The carte by course, with half and full plates, modifiers, allergy notes and seat numbers. Fire a course and the kitchen sees it — and prints it, if there is a printer. |
+| **Kitchen** | A ticket per course per station, timed, with the ones that are running late brought to the front. Bump, recall, reprint. Prints to a thermal printer by itself if one is set up. |
 | **Bills** | Print, split (by seat, by item, or evenly), part-pay across cash, card and UPI, discount with manager approval, void and comp with a reason that is kept. |
 | **Tax** | Service charge and CGST/SGST worked out per line, in whole paise, with the rates and the round-off set in one place. |
 | **Reports** | Today's trading as it happens; the Z report and cash-up at close; thirty days of history; sales by item, by hour, by server and by payment method; a GST summary; CSV export of all of it. |
 | **Book** | Reservations with covers, time, table and a note, carried through to the floor plan. |
 | **Menu** | Add a dish, price it, move it between sections, courses and stations, retire it, and 86 it from anywhere in the building. |
-| **Setup** | The bill header, staff and their PINs, the service charge and tax rates, the rooms and tables, backups, and the live list of terminals. |
+| **Hours** | Staff clock in and out. Everyone marks their own; only the owner sees the whole roster, and the hours go to the cloud for payroll. |
+| **Setup** | The bill header, staff and their PINs, the service charge and tax rates, the rooms and tables, the kitchen printer, backups, and the live list of terminals. |
 | **Cloud** | Optional. An off-site copy in Supabase: bills and the audit trail push up, the menu and staff sync both ways, and the takings are readable from anywhere. Off by default, and the restaurant trades the same without it. |
 
-Every screen is one of four roles' business — manager, captain, cashier,
-kitchen — and the server enforces that, not the interface.
+Every screen is one of five roles' business — admin, manager, captain,
+waiter, kitchen — and the server enforces that, not the interface. The
+takings are admin only: a manager runs the service and never sees them.
+
+The captain and the waiter work on their feet, so the same screens fold down
+to a phone: the sections move to a bar across the bottom under the thumb, and
+the order screen becomes two tabs — the carte, and this table — each with the
+whole glass, rather than two columns neither of which you can read. A tablet
+in portrait keeps both side by side. Nothing is a separate mobile build;
+there is one application and it fits.
 
 ## Try it without installing anything
 
@@ -103,10 +112,11 @@ otherwise have to find out the hard way:
 npm test
 ```
 
-Ninety-five cases: the pricing and order maths as pure functions, the API
-against a real server on a real SQLite database over real HTTP, the published
-demonstration held against the product it demonstrates, and the cloud sync
-against a stand-in for Supabase. Nothing is mocked. A point of sale is a thing that takes money; a suite that stubs out
+A hundred and eleven cases: the pricing and order maths as pure functions, the
+API against a real server on a real SQLite database over real HTTP, the
+published demonstration held against the product it demonstrates, the cloud
+sync against a stand-in for Supabase, and the kitchen printer against a real
+socket and a real file. Nothing is mocked. A point of sale is a thing that takes money; a suite that stubs out
 the database proves only that the stubs work.
 
 ```sh
@@ -114,6 +124,7 @@ npm test unit     # the domain, instantly
 npm test api      # a real server per case
 npm test till     # the demonstration, against the real thing
 npm test sync     # the cloud copy
+npm test printer  # the kitchen printer
 ```
 
 The Supabase SQL is verified separately, against an actual PostgreSQL, since

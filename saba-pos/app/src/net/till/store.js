@@ -15,7 +15,7 @@
  */
 
 import {
-  CHARGES, RESTAURANT, STATIONS, ROLE_LABELS, DAY_ROLLOVER_HOUR,
+  CHARGES, RESTAURANT, STATIONS, ROLE_LABELS, DAY_ROLLOVER_HOUR, PAYMENT_METHODS,
 } from '../../shared/config.js';
 import { MENU_ITEMS, MODIFIER_GROUPS } from '../../shared/catalogue.js';
 import {
@@ -522,7 +522,13 @@ export function markReprint(kotId, user) {
 
 export function setCharges(orderId, { serviceCharge, discount, tip }, { user, approver }) {
   return mutateOrder(orderId, (order) => {
-    if (serviceCharge !== undefined) order.charges.serviceCharge = !!serviceCharge;
+    if (serviceCharge !== undefined) {
+      order.charges.serviceCharge = !!serviceCharge;
+      audit('BILL',
+        `Service charge ${serviceCharge ? 'applied' : 'removed'} on Table ${order.tableLabel}`
+        + (!serviceCharge && approver ? ` (approved by ${approver.name})` : ''),
+        { actor: user.name, meta: { orderId } });
+    }
     if (tip !== undefined) order.charges.tipPaise = Math.max(0, Math.round(Number(tip) || 0));
     if (discount !== undefined) {
       order.charges.discount = {
@@ -542,7 +548,15 @@ export function setCharges(orderId, { serviceCharge, discount, tip }, { user, ap
 }
 
 export const setSplit = (orderId, split) =>
-  mutateOrder(orderId, (order) => { order.split = split; }).order;
+  mutateOrder(orderId, (order) => {
+    // Re-cutting a bill under its payments attaches that money to shares
+    // that no longer exist.
+    if (order.payments.length) {
+      throw conflict('Money has already been taken on this bill, so it cannot'
+        + ' be split differently. Remove the payments first.');
+    }
+    order.split = split;
+  }).order;
 
 export function raiseInvoice(orderId, user) {
   return mutateOrder(orderId, (order) => {
@@ -563,6 +577,9 @@ export function addPayment(orderId, { method, paise, ref, shareId }, user) {
   return mutateOrder(orderId, (order) => {
     const amount = Math.round(Number(paise) || 0);
     if (amount <= 0) throw badRequest('A payment has to be for something');
+    if (!PAYMENT_METHODS.some((m) => m.id === method)) {
+      throw badRequest(`${method} is not a way this till takes money`);
+    }
     order.payments.push({
       id: uid('pay'),
       method,
@@ -579,11 +596,19 @@ export function addPayment(orderId, { method, paise, ref, shareId }, user) {
   }).order;
 }
 
-export function removePayment(orderId, paymentId) {
+export function removePayment(orderId, paymentId, { user, approver, reason }) {
   return mutateOrder(orderId, (order) => {
     const payment = order.payments.find((p) => p.id === paymentId);
     if (!payment) throw notFound('No such payment');
     order.payments = order.payments.filter((p) => p.id !== paymentId);
+    audit('PAYMENT',
+      `Removed a ${payment.method} payment of ${(payment.paise / 100).toFixed(2)}`
+      + ` from Table ${order.tableLabel} — ${reason}`
+      + (approver ? ` (approved by ${approver.name})` : ''),
+      {
+        actor: user.name,
+        meta: { orderId, method: payment.method, paise: payment.paise, reason },
+      });
   }).order;
 }
 
@@ -606,6 +631,31 @@ export function settleOrder(orderId, user, totalDue) {
   bump();
   return order;
 }
+
+export function cancelOrder(orderId, { reason, user, approver }) {
+  const order = getOrder(orderId);
+  if (!order) throw notFound('That table is no longer open');
+  if (order.status === 'SETTLED') {
+    throw conflict('That bill has been settled — reopen it instead');
+  }
+  if (order.status !== 'OPEN') throw conflict('That table is already closed');
+
+  order.status = 'VOID';
+  order.closedAt = Date.now();
+  order.cancelled = {
+    reason, by: (approver || user).name, at: Date.now(),
+    invoice: order.invoice?.code || null,
+  };
+  audit('CANCEL',
+    `Table ${order.tableLabel} cancelled — ${reason}`
+    + (order.invoice ? ` (voids bill ${order.invoice.code})` : ''),
+    { actor: (approver || user).name, meta: { orderId, covers: order.covers } });
+  bump();
+  return order;
+}
+
+export const needsApprovalToCancel = (order) =>
+  Boolean(order.invoice) || order.lines.some((l) => l.status !== 'HELD' && l.status !== 'VOID');
 
 export function reopenOrder(orderId, approver) {
   const order = getOrder(orderId);

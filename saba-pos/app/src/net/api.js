@@ -224,6 +224,7 @@ export const api = {
   dropLine: (id, lineId) => del(`/api/orders/${id}/lines/${lineId}`),
   voidLine: (id, lineId, body) => post(`/api/orders/${id}/lines/${lineId}/void`, body),
   compLine: (id, lineId, body) => post(`/api/orders/${id}/lines/${lineId}/comp`, body),
+  moveLine: (id, lineId, body) => post(`/api/orders/${id}/lines/${lineId}/move`, body),
   fire: (id, course) => post(`/api/orders/${id}/fire`, { course }),
 
   bumpKot: (kotId, to) => post(`/api/kots/${kotId}/status`, { to }),
@@ -234,8 +235,9 @@ export const api = {
   split: (id, body) => post(`/api/orders/${id}/split`, body),
   invoice: (id) => post(`/api/orders/${id}/invoice`),
   pay: (id, body) => post(`/api/orders/${id}/payments`, body),
-  unpay: (id, payId) => del(`/api/orders/${id}/payments/${payId}`),
+  unpay: (id, payId, body) => del(`/api/orders/${id}/payments/${payId}`, body),
   settle: (id) => post(`/api/orders/${id}/settle`),
+  cancelOrder: (id, body) => post(`/api/orders/${id}/cancel`, body),
   reopen: (id, approverPin) => post(`/api/orders/${id}/reopen`, { approverPin }),
 
   menu: () => get('/api/menu'),
@@ -268,6 +270,7 @@ export const api = {
   settings: () => get('/api/settings'),
   saveSettings: (body) => patch('/api/settings', body),
   terminals: () => get('/api/terminals'),
+  testPrinter: () => post('/api/printer/test'),
 
   backup: () => post('/api/backup'),
   syncStatus: () => get('/api/sync'),

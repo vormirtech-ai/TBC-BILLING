@@ -292,14 +292,21 @@ router.post('/api/kots/:kotId/reprint', async (req, res, ctx) => {
 
 router.patch('/api/orders/:id/charges', async (req, res, ctx) => {
   const body = await readJson(req);
+  const may = (ability) => (ROLE_ABILITIES[ctx.user.role] || []).includes(ability);
   let approver = null;
 
   // Past the threshold the discount stops being a cashier's call.
   if (body.discount && body.discount.mode === 'PCT'
       && Number(body.discount.value) > store.charges().discountApprovalPercent) {
     approver = approvalFrom(body, ctx, 'discount');
-  } else if (body.discount && body.discount.mode !== 'NONE'
-      && !(ROLE_ABILITIES[ctx.user.role] || []).includes('discount')) {
+  } else if (body.discount && body.discount.mode !== 'NONE' && !may('discount')) {
+    approver = approvalFrom(body, ctx, 'discount');
+  }
+
+  // Taking the service charge off a 23,000 bill gives away more than the
+  // discount that needs a manager two lines above, and it used to need
+  // nobody at all. Putting it back on is nobody's loss and stays free.
+  if (body.serviceCharge === false && !may('discount')) {
     approver = approvalFrom(body, ctx, 'discount');
   }
 
@@ -345,12 +352,46 @@ router.post('/api/orders/:id/payments', async (req, res, ctx) => {
   }, ctx.user));
 });
 
+/*
+ * Taking a payment back off a bill is how cash walks out of a restaurant:
+ * record the tender, pocket the notes, delete the line, and the table simply
+ * looks unpaid again. So it needs the same authority as voiding a dish, a
+ * reason in the captain's own words, and both of them in the audit.
+ */
 router.delete('/api/orders/:id/payments/:payId', async (req, res, ctx) => {
-  withOrder(res, store.removePayment(req.params.id, req.params.payId, ctx.user));
+  const body = await readJson(req);
+  const reason = requireReason(body);
+  const approver = (ROLE_ABILITIES[ctx.user.role] || []).includes('void')
+    ? null
+    : approvalFrom(body, ctx, 'void');
+
+  withOrder(res, store.removePayment(req.params.id, req.params.payId, {
+    user: ctx.user, approver, reason,
+  }));
 });
 
 router.post('/api/orders/:id/settle', async (req, res, ctx) => {
   withOrder(res, store.settleOrder(req.params.id, ctx.user));
+});
+
+/**
+ * Cancel a whole table.
+ *
+ * Who may do it depends on whether the kitchen has started: see CANCEL_POLICY
+ * in shared/config.js, which is also what the Setup screen prints, so the
+ * rule a restaurant reads is the rule this enforces.
+ */
+router.post('/api/orders/:id/cancel', async (req, res, ctx) => {
+  const body = await readJson(req);
+  const order = store.getOrder(req.params.id);
+  if (!order) throw notFound('That table is no longer open');
+
+  const reason = requireReason(body);
+  const approver = store.needsApprovalToCancel(order)
+    ? approvalFrom(body, ctx, 'cancelOrder')
+    : null;
+
+  withOrder(res, store.cancelOrder(req.params.id, { reason, user: ctx.user, approver }));
 });
 
 router.post('/api/orders/:id/reopen', async (req, res, ctx) => {
@@ -730,6 +771,18 @@ router.post('/api/attendance/out', async (req, res, ctx) => {
   });
 });
 
+/** Send a test page, so a printer can be checked without a service. */
+router.post('/api/printer/test', async (req, res, ctx) => {
+  auth.requireAbility(ctx.user, 'settings');
+  const printing = store.getSetting('printing') || {};
+  if (!printing.kotPrinter) throw new HttpError(409, 'No kitchen printer is configured');
+
+  const printer = await import('./printer/index.js');
+  const result = await printer.testPage(printing.kotPrinter, printing.paper || '80mm');
+  if (!result.ok) throw new HttpError(502, `The printer did not answer: ${result.error}`);
+  sendJson(res, 200, { ok: true, printer: printing.kotPrinter });
+});
+
 /* -------------------------------------------------------- cloud sync --- */
 
 /**
@@ -802,6 +855,7 @@ const POLICY = {
   'POST /api/orders/:id/payments': { screen: '/bill' },
   'DELETE /api/orders/:id/payments/:payId': { screen: '/bill' },
   'POST /api/orders/:id/settle': { screen: '/bill' },
+  'POST /api/orders/:id/cancel': { screen: '/order' },
   'POST /api/orders/:id/reopen': { screen: '/bill', ability: 'reopen' },
 
   // 86 is an operational call a captain makes mid-service, so it is gated on
@@ -834,6 +888,7 @@ const POLICY = {
   'PATCH /api/users/:id': { ability: 'users' },
   'PATCH /api/settings': { ability: 'settings' },
   'GET /api/terminals': { ability: 'settings' },
+  'POST /api/printer/test': { ability: 'settings' },
 
   'POST /api/authorise': {},
   'POST /api/demo/reset': { ability: 'settings' },

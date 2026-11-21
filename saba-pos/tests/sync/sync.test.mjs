@@ -13,15 +13,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { test } from '../run.mjs';
+import { nextPort } from '../port.mjs';
 import { startFakeSupabase } from './fake-supabase.mjs';
 
-let port = 9900 + Math.floor(Math.random() * 300);
+let port = 0;
 
 /** A till with a cloud project behind it. */
 async function withTill(options, fn) {
   const cloud = await startFakeSupabase();
   const dir = mkdtempSync(join(tmpdir(), 'saba-sync-'));
-  port += 1;
+  port = nextPort();
 
   const { start } = await import('../../server/main.js');
   const db = await import('../../server/db/index.js');
@@ -298,7 +299,7 @@ test('the line coming back is caught in a minute, not at the next pass', async (
 test('a wrong key is reported as a wrong key, not retried forever', async (t) => {
   const cloud = await startFakeSupabase({ key: 'the-real-key' });
   const dir = mkdtempSync(join(tmpdir(), 'saba-sync-'));
-  port += 1;
+  port = nextPort();
 
   const { start } = await import('../../server/main.js');
   const db = await import('../../server/db/index.js');
@@ -327,7 +328,7 @@ test('a wrong key is reported as a wrong key, not retried forever', async (t) =>
 
 test('with no project configured, the sync stays out of the way', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'saba-sync-'));
-  port += 1;
+  port = nextPort();
 
   const { start } = await import('../../server/main.js');
   const db = await import('../../server/db/index.js');

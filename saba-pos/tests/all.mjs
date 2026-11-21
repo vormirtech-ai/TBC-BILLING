@@ -6,6 +6,7 @@
  *   node tests/all.mjs api        the API only
  *   node tests/all.mjs till       the published demonstration only
  *   node tests/all.mjs sync       the cloud copy only
+ *   node tests/all.mjs printer    the kitchen printer only
  *
  * No framework, no dependencies, no build step — the same constraints the
  * application itself runs under.
@@ -34,10 +35,13 @@ const SYNC = [
   './sync/sync.test.mjs',
 ];
 
-const files = only === 'unit' ? UNIT
-  : only === 'api' ? API
-    : only === 'till' ? TILL
-      : only === 'sync' ? SYNC
-        : [...UNIT, ...API, ...TILL, ...SYNC];
+/** The kitchen printer, against a socket and a file. */
+const PRINTER = [
+  './printer/printer.test.mjs',
+];
+
+const SUITES = { unit: UNIT, api: API, till: TILL, sync: SYNC, printer: PRINTER };
+
+const files = SUITES[only] || [...UNIT, ...API, ...TILL, ...SYNC, ...PRINTER];
 
 await run(files);

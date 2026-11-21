@@ -69,6 +69,59 @@ export const CHARGES = {
   discountApprovalPercent: 15,
 };
 
+/* --------------------------------------------------- cancelling an order --- */
+
+/**
+ * When a whole table can be cancelled, and by whom.
+ *
+ * The rule follows the work, not the money. Nothing has been cooked, so
+ * nothing has been lost: a table seated in error is the captain's own
+ * mistake to undo, and making them find a manager for it only teaches them
+ * to seat the wrong table and say nothing. The moment the kitchen has
+ * started, somebody has spent food and labour, and that needs a manager and
+ * a reason. Once the guest has a printed bill the restaurant has made a
+ * claim on them, and once they have paid it is history — reopen it instead,
+ * which is the admin's call and leaves its own trail.
+ *
+ * These are the words shown on the Setup screen, so the policy a restaurant
+ * reads and the policy the server enforces cannot drift apart.
+ */
+export const CANCEL_POLICY = [
+  {
+    when: 'Nothing has gone to the kitchen',
+    who: 'Anyone who can take an order',
+    note: 'A table seated or rung up by mistake. Nothing was cooked, so '
+      + 'nothing is lost — the table simply goes back to vacant.',
+  },
+  {
+    when: 'A course has been fired',
+    who: 'Manager or owner, with a reason',
+    note: 'The kitchen has spent food and labour. The cancellation and the '
+      + 'reason are recorded against whoever approved it.',
+  },
+  {
+    when: 'The bill has been printed',
+    who: 'Manager or owner, with a reason',
+    note: 'The guest has been shown a total. Cancelling now is recorded with '
+      + 'the invoice number it voids.',
+  },
+  {
+    when: 'The bill has been settled',
+    who: 'Nobody — it is history',
+    note: 'Reopen it instead, which only an owner can do and which leaves '
+      + 'its own entry in the audit trail.',
+  },
+];
+
+export const CANCEL_REASONS = [
+  'Table seated by mistake',
+  'Guests left before ordering',
+  'Ordered on the wrong table',
+  'Duplicate order',
+  'Guest cancelled',
+  'Kitchen cannot make it',
+];
+
 /* ---------------------------------------------------------------- roles --- */
 
 export const ROLES = {
@@ -188,6 +241,18 @@ export const COMP_REASONS = [
   'Quality issue',
   'Regular guest',
   'Manager’s discretion',
+];
+
+/**
+ * Why a tender is being taken back off a bill. Deleting a payment is how
+ * cash walks out of a restaurant, so the till asks in words and keeps them.
+ */
+export const UNPAY_REASONS = [
+  'Entered on the wrong table',
+  'Entered as the wrong tender',
+  'Wrong amount keyed',
+  'Card declined after all',
+  'Guest is paying another way',
 ];
 
 export const DISCOUNT_REASONS = [

@@ -54,13 +54,22 @@ on the bill is on the record.
 |---|---|
 | **Split** | By seat, by item, or evenly. Each share is a real bill with its own proportional service charge and tax, so the shares always add back to the total. |
 | **Part payment** | Add as many payments as the table wants, across cash, card and UPI, until the balance is nothing. |
-| **Service charge** | A cashier can take it off any bill without asking anybody. A guest who asks for that should never get an argument. |
+| **Service charge** | A manager or the owner can take it off. Anyone else needs a manager's PIN at the moment it is done — on a large bill it is worth more than a discount that already needed one. Putting it back on asks nobody. |
 | **Discount** | Up to the configured threshold (15% as shipped), anybody who can open the bill screen. Above it, a manager's PIN at the moment it is given. |
 | **Comp** | The house is giving it away. It shows on the bill at nil and in the day's comps. |
 | **Void** | It should never have been charged. Needs a reason, and a manager's PIN if the kitchen has already seen it. |
+| **Taking a payment back off** | The bin beside a payment. A manager's PIN unless the person can already void a dish, **and** a reason from the list. Both go on the record with the amount. |
 | **Settle** | Once the balance is nothing. The table goes back to vacant and the bill is closed. |
 
 Reopening a settled bill needs a manager and is recorded.
+
+Two things the till will simply refuse, whoever asks:
+
+- **Splitting a bill after money has been taken on it.** Each payment belongs
+  to one share; re-cutting the bill underneath leaves that money attached to
+  a share that no longer exists. Remove the payments, split, take them again.
+- **A tender it does not know.** Cash, card, UPI, room charge and voucher.
+  Only cash is counted against the drawer at close.
 
 ### Closing
 
@@ -101,10 +110,15 @@ address in by hand.
 
 | Role | Opens |
 |---|---|
-| **Manager** | everything, including Setup and the takings |
-| **Captain** | floor, order, kitchen, bills, reservations — but not the takings, and not Setup |
-| **Cashier** | floor, order, bills, reports |
+| **Admin (owner)** | everything — Setup, the takings, staff, backups, the cloud |
+| **Manager** | floor, order, kitchen, bills, book, menu, hours — runs the service, but **never the takings** |
+| **Captain** | floor, order, kitchen, bills, book, hours |
+| **Waiter** | floor, order, hours |
 | **Kitchen** | the kitchen display, and nothing else |
+
+The takings are the owner's business. Reports, daily sales, the CSV exports
+and the backups are **admin only** — a manager running the floor cannot see
+them, and neither can anybody else.
 
 Two people cannot share a PIN; Saba refuses it. If somebody forgets theirs, a
 manager sets a new one in Setup → People, which also signs that person out
@@ -121,6 +135,63 @@ at 04:30 and the last fourteen are kept.
 **Keep one off the premises:** Setup → Back up now → **Download a copy**,
 onto the owner's laptop or a USB stick. Do it weekly. A backup that lives only on the
 till is not a backup — the fire that takes the till takes it too.
+
+### Hours
+
+Everybody from a waiter upward has an **Hours** screen with one button on
+it. Press it on arrival, press it again on leaving. Somebody who goes out
+and comes back gets two spells, which is the truth; the screen adds them up.
+
+Only the owner sees everybody's hours. A waiter sees their own and nobody
+else's.
+
+### Half plates
+
+A dish that is priced for a half shows **Full** and **Half** with both
+prices when it is tapped. The docket says `(HALF)` where the cook can see
+it, and so does the bill. A dish with no half price simply does not offer
+one.
+
+Setting a half price: **Menu → the dish → Half plate (₹)**. Leave it empty
+and the dish is full plates only.
+
+### A dish taken to the wrong table
+
+Floor plans being what they are, the lamb sometimes goes to six when it was
+ordered on four. On the order screen, the ⇅ button beside the line moves it:
+pick the table it should have gone to, and a manager approves. The money
+moves with the dish.
+
+The kitchen docket does **not** move — it was printed for the table it was
+cooked for, and that is the record. Once a bill has been printed the dish
+cannot be moved off it at all, because the guest has already been shown a
+total.
+
+### Cancelling a table
+
+**Order → Cancel.** What happens next depends on how far it has got:
+
+| | |
+|---|---|
+| Nothing gone to the kitchen | Whoever is on the floor can cancel it. Nothing was cooked, nothing is lost. |
+| A course has been fired | A manager approves, with a reason. The kitchen has spent food. |
+| The bill has been printed | A manager approves, with a reason. The record names the bill it voids. |
+| The bill is settled | Not possible. Reopen it instead — the owner's call. |
+
+A cancelled table keeps its record, marked void, with the reason and who
+approved it. It leaves the floor and counts towards nothing. The same table
+is immediately free to seat again.
+
+### The kitchen printer
+
+If a thermal printer is set up, a docket prints by itself the moment a
+course is fired — no button, no dialogue. **Setup → Printing → Kitchen
+printer** takes either a network address (`192.168.1.50:9100`) or a USB
+device (`/dev/usb/lp0`), and has a **Test page** button.
+
+A printer that is switched off, out of paper or unplugged **never holds up
+service**. The kitchen screen has the docket regardless; the till writes one
+line to its log and carries on.
 
 ### The cloud copy, if you have one
 

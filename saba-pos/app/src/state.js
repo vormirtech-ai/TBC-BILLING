@@ -199,6 +199,16 @@ export const changeQty = (orderId, lineId, qty) =>
     : command(api.setLine(orderId, lineId, { qty })));
 
 export const dropLine = (orderId, lineId) => command(api.dropLine(orderId, lineId));
+
+/** The whole table goes. It leaves the floor, so refetch rather than patch. */
+export const cancelOrder = (orderId, reason, approverPin) =>
+  api.cancelOrder(orderId, { reason, approverPin })
+    .then((r) => { replica.seenRevision(r.revision, 'cancel'); return r.order; });
+
+/** Carried to the wrong table. Both bills change, so refetch the lot. */
+export const moveLine = (orderId, lineId, toOrderId, approverPin) =>
+  api.moveLine(orderId, lineId, { toOrderId, approverPin })
+    .then((r) => { replica.seenRevision(r.revision, 'move'); return r.order; });
 export const setSeat = (orderId, lineId, seat) => command(api.setLine(orderId, lineId, { seat }));
 
 export const killLine = (orderId, lineId, reason, approverPin) =>
@@ -219,8 +229,8 @@ export const killKot = (kotId, reason, approverPin) =>
   command(api.voidKot(kotId, { reason, approverPin }));
 export const markReprint = (kotId) => command(api.reprintKot(kotId));
 
-export const setServiceCharge = (orderId, on) =>
-  command(api.charges(orderId, { serviceCharge: on }));
+export const setServiceCharge = (orderId, on, approverPin) =>
+  command(api.charges(orderId, { serviceCharge: on, approverPin }));
 
 export const setDiscount = (orderId, discount, approverPin) =>
   command(api.charges(orderId, { discount, approverPin }));
@@ -234,7 +244,8 @@ export const buildSplitOn = (orderId, mode, ways) =>
 
 export const raiseInvoice = (orderId) => command(api.invoice(orderId));
 export const addPayment = (orderId, payment) => command(api.pay(orderId, payment));
-export const removePayment = (orderId, paymentId) => command(api.unpay(orderId, paymentId));
+export const removePayment = (orderId, paymentId, reason, approverPin) =>
+  command(api.unpay(orderId, paymentId, { reason, approverPin }));
 export const settleOrder = (orderId) => command(api.settle(orderId));
 export const reopenOrder = (orderId, approverPin) => command(api.reopen(orderId, approverPin));
 
@@ -287,6 +298,7 @@ export const saveSettings = (body) => api.saveSettings(body).then((r) => {
   return r.settings;
 });
 export const terminals = () => api.terminals().then((r) => r.terminals);
+export const testPrinter = () => api.testPrinter();
 export const syncStatus = () => api.syncStatus().then((r) => r.sync);
 export const syncNow = () => api.syncNow().then((r) => r.sync);
 export const syncCheck = () => api.syncCheck();

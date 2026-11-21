@@ -165,7 +165,7 @@ boot and pushed into the shared modules:
 | `restaurant` | the bill header | — | read directly |
 | `charges` | service charge, tax components, rounding, approval threshold | `store.loadCharges()` | `pricing.useCharges()` |
 | `floorplan` | rooms and tables | `store.loadFloorPlan()` | `floorplan.useFloorPlan()` |
-| `printing` | bill format, watermark | — | read directly |
+| `printing` | bill format, watermark, kitchen printer, paper width | — | read directly |
 
 The pattern is the same for all of them, and worth following for the next
 one:
@@ -188,6 +188,35 @@ setting; `shared/catalogue.js` only seeds it.
 ---
 
 ## How to do the things you will be asked to do
+
+### Make a screen work on a phone
+
+The captain and the waiter work on their feet, so every screen has to hold at
+390px. Three breakpoints, in this order down the sheet:
+
+| Width | What changes |
+|---|---|
+| **≤ 1180px** | the pad narrows; the dish grid tightens |
+| **≤ 860px** | the rail moves to the bottom and scrolls; the title bar wraps to two rows; cards go one across; tables scroll inside their card; toasts move to the top, clear of the thumb bar and of a dialog's buttons |
+| **≤ 700px** | the order screen becomes two tabs — the carte, and this table — because side by side on a phone leaves a waiter one half-visible dish |
+
+Rules that are easy to get wrong and expensive to find later:
+
+- **`minmax(0, 1fr)`, never a bare `1fr` or an implicit `auto` track.** An
+  auto track will not shrink below its widest child, so one wide table inside
+  a grid silently makes the whole page scroll sideways. `.grid` sets this by
+  default now.
+- **A row of tabs scrolls inside itself.** `.segmented` does this for every
+  use of it — six rooms, twelve seats, four date ranges.
+- **Inline `gridTemplateColumns` outranks a media query.** Several views set
+  two columns inline; `.view__pad .grid` in the 860 block is the one
+  `!important` in the sheet, and it is there for that reason.
+- **`@media (pointer: coarse)` for touch targets**, not a width — a 28px
+  button is fine under a cursor at any width and too small under a thumb.
+
+`tests/` cannot see layout. The check is a headless pass at 360, 390, 820 and
+1440 that asserts `document.scrollWidth === window.innerWidth` and that no
+element overflows a parent that is not a scroller.
 
 ### Add a screen
 
@@ -290,6 +319,49 @@ views add up to the same figures the till's own day report shows. Run that
 when the SQL changes; it is not in `npm test` because the suite must not
 need a database server.
 
+## The kitchen printer
+
+`server/printer/` is two files and no dependency.
+
+- **`escpos.js`** turns a docket into bytes. It is pure: give it a KOT and it
+  gives you a `Uint8Array`, which is why `tests/printer/` can read what a
+  cook would read. It folds Unicode to ASCII on the way out (`'` to `'`,
+  `₹` to `Rs `) because a thermal printer's character set is not UTF-8, and
+  it wraps on the paper's own width — 48 columns on 80mm, 32 on 58mm —
+  breaking words longer than the paper rather than letting them run off it.
+- **`index.js`** puts the bytes somewhere. A target that looks like
+  `host:port` is a socket (port 9100 is the raw-printing port almost every
+  network printer listens on); anything else is a device file, which is what
+  a USB printer is on Linux. `send()` **never rejects**: a printer that is
+  off must not take a table's order down with it, so a failure is one log
+  line, and a `complained` map keeps it to one line per outage rather than
+  one per docket.
+
+`fire()` calls `printDockets()` **without awaiting it**. Firing a course is a
+database transaction; a printer at the end of a cable is not allowed to hold
+it open.
+
+---
+
+## Rules that cost money if you get them wrong
+
+Four things on a bill are worth more than they look, and all four are
+enforced on the server, mirrored in `app/src/net/till/`, and covered in
+`tests/api/server.test.mjs`:
+
+| Thing | Rule | Why |
+|---|---|---|
+| **Removing a payment** | needs the `void` ability or a manager's PIN, **and** a reason | Record the cash, pocket the notes, delete the line, and the table simply looks unpaid again. This is the classic till fraud. |
+| **Removing the service charge** | needs the `discount` ability or a manager's PIN | 10% of a large bill is worth more than the discount that already needed a manager two lines above it. |
+| **Re-splitting a paid bill** | refused outright | Each payment is taken against one share. Re-cut the bill underneath and that money points at a share that no longer exists. |
+| **The tender's name** | must be one of `PAYMENT_METHODS` | An unknown tender becomes its own column in the day's takings, and only `CASH` is counted against the drawer at close. |
+
+Every one of them writes an audit entry naming the actor, the amount, the
+reason and the approver. If you add another way for money to leave a bill,
+it needs all four of those too.
+
+---
+
 ## Things that will bite you
 
 **`node:sqlite` is experimental.** It prints a warning on every start, and
@@ -344,10 +416,24 @@ report, every counter and the day-close all use `businessDay()`; never use
 npm test
 ```
 
+A hundred and eleven cases. `npm test <suite>` runs one of them:
+
 - `tests/unit/` — the pure functions, in-process, instant.
 - `tests/api/` — a real server, a real SQLite database, real HTTP, one
   freshly started per case on its own port with its own temporary directory.
   Nothing is mocked.
+- `tests/till/` — the published demonstration held against the product it
+  demonstrates. `parity.test.mjs` runs one whole service through both and
+  insists the totals match to the paise, and that the demonstration refuses
+  everything the product refuses.
+- `tests/sync/` — the cloud copy, against a stand-in for Supabase.
+- `tests/printer/` — the kitchen printer, against a real socket and a real
+  file.
+
+**Ports come from `tests/port.mjs`.** One counter, shared. Two suites that
+each picked their own "random" range overlapped exactly once in fifty runs,
+and the failure read as "fetch failed" with no hint of where it came from.
+Never allocate a port any other way.
 
 `tests/run.mjs` is a ninety-line runner. `SABA_TEST_TRACE=1` prints stack
 frames and the slowest cases.

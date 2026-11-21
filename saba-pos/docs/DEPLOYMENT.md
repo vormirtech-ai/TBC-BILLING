@@ -172,14 +172,23 @@ held and sent when they walk back in — but it is better not to make them.
 
 Each of those is a screen; none of them needs a text editor or a restart.
 
-### The four roles
+### The five roles
 
 | Role | Opens | Typically |
 |---|---|---|
-| **Manager** | everything | the owner, the restaurant manager |
-| **Captain** | floor, order, kitchen, bills, book | waiting staff |
-| **Cashier** | floor, order, bills, reports | the till |
+| **Admin** | everything, including the takings and Setup | the owner |
+| **Manager** | floor, order, kitchen, bills, book, menu, hours — not the takings | the restaurant manager |
+| **Captain** | floor, order, kitchen, bills, book, hours | senior waiting staff |
+| **Waiter** | floor, order, hours | waiting staff |
 | **Kitchen** | the kitchen display | the pass |
+
+The first account created on a new till is an **admin**, and it is the
+owner's. Reports, daily sales, CSV exports, backups and the cloud settings
+are admin only — a manager running the floor cannot reach any of them.
+
+Upgrading an existing till migrates the accounts: whoever was a manager
+becomes an **admin** (so nobody is locked out of their own system), and a
+cashier becomes a **manager**.
 
 Roles are enforced by the server, on every request, not by hiding buttons. A
 captain's tablet cannot read the day's takings even if somebody types the
@@ -205,9 +214,16 @@ inside the app.
   80mm and fall back gracefully to A4/A5.
 - **Set the browser's margins to none** and switch off headers and footers,
   once per device. Otherwise the page number and the URL print on the bill.
-- **Kitchen tickets** can be printed the same way, but a screen at the pass
-  is better: it shows what is late, and it cannot run out of paper
-  mid-service.
+- **Kitchen tickets print by themselves.** Set **Setup → Printing → Kitchen
+  printer** to a network address (`192.168.1.50:9100`, which is the port
+  almost every thermal printer uses for raw printing) or to a USB device
+  (`/dev/usb/lp0` on Linux). A docket then prints the moment a course is
+  fired, with no dialogue and nobody pressing anything.
+
+  There is a **Test page** button beside it. If the printer is off, out of
+  paper or unplugged, nothing stops: the kitchen screen has the docket and
+  the till logs one line. A screen at the pass is still worth having — it
+  shows what is running late, and it cannot run out of paper.
 
 ---
 

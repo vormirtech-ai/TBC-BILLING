@@ -13,12 +13,12 @@ import { charges } from '../shared/pricing.js';
 import { sections, tables as planTables, tablesInSection } from '../shared/floorplan.js';
 import { longDate, clockTime, plural } from '../shared/format.js';
 import {
-  APP, STATIONS, COURSES, ROLE_LABELS, ROLE_ORDER, ROLE_ABILITIES,
+  APP, STATIONS, COURSES, ROLE_LABELS, ROLE_ORDER, ROLE_ABILITIES, CANCEL_POLICY,
 } from '../shared/config.js';
 import {
   settings, saveSettings, users, addUser, updateUser, session, can,
   takeBackup, downloadLinks, terminals, resetDemo, openOrders, settledToday,
-  businessDay, api, syncStatus, syncNow,
+  businessDay, api, syncStatus, syncNow, testPrinter,
 } from '../state.js';
 import { setTopbar, repaint } from '../ui/shell.js';
 import {
@@ -45,6 +45,7 @@ export function renderSettings(host) {
     renderProfile(profile),
     renderPeople(),
     renderCharges(),
+    renderCancelPolicy(),
     renderRoom(),
     renderKitchen(),
     renderPrinting(),
@@ -463,6 +464,32 @@ function editApproval() {
   });
 }
 
+/* ---------------------------------------------------- cancellation --- */
+
+/*
+ * Printed from CANCEL_POLICY, which is the same object the server checks
+ * against. A policy a restaurant reads and a policy the till enforces
+ * cannot drift apart if there is only one of them.
+ */
+function renderCancelPolicy() {
+  return card('Cancelling a table', 'Who may, and when', [
+    ...CANCEL_POLICY.map((rule) => setting(
+      rule.when,
+      rule.note,
+      chip(rule.who, rule.who.startsWith('Nobody') ? 'danger'
+        : rule.who.startsWith('Anyone') ? 'outline' : 'gold')
+    )),
+    setting(
+      'What is kept',
+      'A cancelled table keeps its row, marked void, with the reason and who '
+      + 'approved it. It leaves the floor and counts towards nothing. A table '
+      + 'that was open for forty minutes and then cancelled is something a '
+      + 'manager may be asked about, and a row that vanished answers nothing.',
+      chip('On the record', 'outline')
+    ),
+  ]);
+}
+
 /* --------------------------------------------------------------- room --- */
 
 /*
@@ -696,12 +723,11 @@ function renderPrinting() {
     ),
     setting(
       'Station dockets',
-      'One docket per station, routed by the kitchen section each dish belongs to. '
-      + 'They go to the browser’s printer; a networked thermal printer per station '
-      + 'is the usual next step.',
+      'One docket per station, routed by the kitchen section each dish belongs to.',
       h('div.u-row.u-wrap', { style: { gap: '6px', justifyContent: 'flex-end' } },
         STATIONS.map((s) => chip(s.short, 'outline')))
     ),
+    renderKotPrinter(),
     setting(
       'Watermark on printed bills',
       'The medallion is embossed behind the items at 5% — visible on good '
@@ -709,6 +735,113 @@ function renderPrinting() {
       chip('On', 'olive')
     ),
   ]);
+}
+
+/*
+ * The kitchen printer.
+ *
+ * A network printer is a socket on port 9100 — that is all "raw printing"
+ * has ever meant — and a USB one on Linux is a device file. So the setting
+ * is one box: an address or a path. Blank means the kitchen reads its
+ * screen, which it can do perfectly well.
+ */
+function renderKotPrinter() {
+  const printing = settings().printing || {};
+  const target = printing.kotPrinter || '';
+
+  if (!can('settings')) {
+    return setting('Kitchen printer',
+      target ? 'Dockets print automatically when a course is fired.' : 'Screen only.',
+      chip(target ? 'On' : 'Screen only', target ? 'olive' : 'outline'));
+  }
+
+  return setting(
+    'Kitchen printer',
+    target
+      ? 'A docket prints the moment a course is fired. If the printer is off '
+        + 'or out of paper the kitchen screen still has it, and service is '
+        + 'not held up.'
+      : 'Leave it empty and the kitchen works from its screen. Give it a '
+        + 'network address like 192.168.1.50:9100, or a USB device such as '
+        + '/dev/usb/lp0, and dockets print by themselves.',
+    h('div.u-row.u-wrap', { style: { gap: '7px', justifyContent: 'flex-end' } }, [
+      h('button.btn.btn--outline.btn--sm', {
+        type: 'button',
+        text: target || 'Set a printer',
+        onclick: editKotPrinter,
+      }),
+      target
+        ? h('button.btn.btn--outline.btn--sm', {
+          type: 'button',
+          onclick: async (event) => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+              await testPrinter();
+              toast('Test page sent', 'good');
+            } catch (error) {
+              toast(error.message, 'bad', 6000);
+            } finally {
+              button.disabled = false;
+            }
+          },
+        }, [icon('print', { size: 15 }), 'Test page'])
+        : null,
+    ].filter(Boolean))
+  );
+}
+
+function editKotPrinter() {
+  const printing = settings().printing || {};
+  const target = h('input.input', {
+    value: printing.kotPrinter || '',
+    placeholder: '192.168.1.50:9100',
+    maxLength: 120,
+  });
+  const paper = h('select.select', {}, ['80mm', '58mm'].map((size) =>
+    h('option', { value: size, text: size, selected: (printing.paper || '80mm') === size })));
+
+  dialog({
+    title: 'Kitchen printer',
+    size: 'slim',
+    body: h('div.grid', { style: { gap: '14px' } }, [
+      h('div.field', {}, [
+        h('label.field__label', { text: 'Address or device' }),
+        target,
+        h('p.field__hint', {
+          text: 'A network printer is its address and port, almost always 9100. '
+            + 'A USB printer on Linux is a device file such as /dev/usb/lp0. '
+            + 'Leave it empty for screen only.',
+        }),
+      ]),
+      h('div.field', {}, [h('label.field__label', { text: 'Paper' }), paper]),
+      notice(
+        'Dockets print when a course is fired. A printer that is switched off '
+        + 'never holds up service \u2014 the kitchen screen has the docket either way.',
+        'info', 'info'
+      ),
+    ]),
+    actions: [
+      { label: 'Cancel', onclick: (close) => close() },
+      {
+        label: 'Save',
+        tone: 'primary',
+        onclick: (close) => {
+          close();
+          saveSettings({
+            printing: {
+              ...printing,
+              kotPrinter: target.value.trim(),
+              paper: paper.value,
+            },
+          })
+            .then(() => toast(target.value.trim()
+              ? 'Kitchen printer set' : 'Kitchen printing turned off', 'good'))
+            .catch((error) => toast(error.message, 'bad', 5000));
+        },
+      },
+    ],
+  });
 }
 
 /* -------------------------------------------------------------- cloud --- */
