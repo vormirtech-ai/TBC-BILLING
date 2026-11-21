@@ -14,3 +14,9 @@ Cafe_POS_Before_Restore_*.json
 node_modules/
 dist/
 _site/
+
+# Saba59/ is a checkout of a *different* repository, staged here ready to
+# push to github.com/vormirtech-ai/Saba59. It has its own .git, so committing
+# it here would leave a gitlink that breaks every clone. Its contents are in
+# Saba59-upload.zip, which is committed, so nothing is lost by ignoring it.
+Saba59/
